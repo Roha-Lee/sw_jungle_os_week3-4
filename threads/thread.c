@@ -26,18 +26,22 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
+// thread들의 대기 큐 -> 여기서 한 스레드 선택되어서 실행됨 
 static struct list ready_list;
 
 /* Idle thread. */
+// 아무 스레드도 실행되고 있지 않을때 돌아가는 스레드 
 static struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main(). */
+// 초기에 실행되는 스레드??????
 static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
 /* Thread destruction requests */
+// 사용이 끝난 쓰레드들의 리스트? 
 static struct list destruction_req;
 
 /* Statistics. */
@@ -52,6 +56,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
+// true인 경우 multi-level feedback queue 스케쥴러 사용 
+// false인 경우 라운드 로빈 방식 스케쥴러 사용 
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -71,6 +77,9 @@ static tid_t allocate_tid (void);
  * down to the start of a page.  Since `struct thread' is
  * always at the beginning of a page and the stack pointer is
  * somewhere in the middle, this locates the curent thread. */
+/* 
+	rsp(CPU의 stack pointer)를 읽어서 맨 처음을 읽으면 struct thread를 읽을 수 있다.
+*/
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
 
 
@@ -185,12 +194,15 @@ thread_create (const char *name, int priority,
 	ASSERT (function != NULL);
 
 	/* Allocate thread. */
+	// 4kB가상 메모리를 할당? PAL_ZERO -> 0으로 초기화 해줌 
 	t = palloc_get_page (PAL_ZERO);
+	// 할당받지 못하면 스레드 생성 못하므로 에러 발생 
 	if (t == NULL)
 		return TID_ERROR;
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
+	// allocate_tid는 카운터이므로 1증가된 값 반환 
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -237,11 +249,15 @@ thread_unblock (struct thread *t) {
 	enum intr_level old_level;
 
 	ASSERT (is_thread (t));
-
+	// 인터럽트 비활성화 
 	old_level = intr_disable ();
+	// thread가 block상태가 아니라면 에러 발생 
 	ASSERT (t->status == THREAD_BLOCKED);
+	// 대기 리스트에 넣어준다. 
 	list_push_back (&ready_list, &t->elem);
+	// 스레드 상태 변경 
 	t->status = THREAD_READY;
+	// 인터럽트 활성화 
 	intr_set_level (old_level);
 }
 
@@ -256,6 +272,7 @@ thread_name (void) {
    See the big comment at the top of thread.h for details. */
 struct thread *
 thread_current (void) {
+	// 현재 실행중인 스레드를 얻음 
 	struct thread *t = running_thread ();
 
 	/* Make sure T is really a thread.
@@ -263,7 +280,9 @@ thread_current (void) {
 	   have overflowed its stack.  Each thread has less than 4 kB
 	   of stack, so a few big automatic arrays or moderate
 	   recursion can cause stack overflow. */
+	// 스레드인지 확인 (매직넘버 이용)
 	ASSERT (is_thread (t));
+	// 실행중인 스레드인지 확인 
 	ASSERT (t->status == THREAD_RUNNING);
 
 	return t;
@@ -298,13 +317,17 @@ void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
-
+	// 외부 인터럽트가 발생하면(응급상황에서만 발생한다고 함) 종료
 	ASSERT (!intr_context ());
 
+	// 인터럽트를 비활성화
 	old_level = intr_disable ();
+	// 현재 스레드가 아이들 스레드가 아니면 대기큐(ready list)에 현재 스레드의 elem을 넣어줌(일종의 키값)
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem);
+	
 	do_schedule (THREAD_READY);
+	// 인터럽트 활성화 
 	intr_set_level (old_level);
 }
 
@@ -404,6 +427,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	ASSERT (name != NULL);
 
 	memset (t, 0, sizeof *t);
+	// 처음 상태는 THREAD_BLOCKED
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
@@ -525,6 +549,7 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
+// 
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
@@ -577,13 +602,17 @@ schedule (void) {
 }
 
 /* Returns a tid to use for a new thread. */
+// 새로운 스레드를 위한 tid를 할당해주는 함수 
 static tid_t
 allocate_tid (void) {
+	// static 변수를 선언하여 카운터 함수 만들었음
+	// 함수안에서만 사용할 수 있는 전역변수와 같은 개념 
 	static tid_t next_tid = 1;
 	tid_t tid;
-
+	// tid를 증가시키는 임계영역에 들어가기 전에 lock
 	lock_acquire (&tid_lock);
 	tid = next_tid++;
+	// tid를 증가시킨 후 lock 해제
 	lock_release (&tid_lock);
 
 	return tid;
