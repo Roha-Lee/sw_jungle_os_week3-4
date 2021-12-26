@@ -60,6 +60,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 // true인 경우 multi-level feedback queue 스케쥴러 사용 
 // false인 경우 라운드 로빈 방식 스케쥴러 사용 
 bool thread_mlfqs;
+
+// 다음에 thread_awake가 호출되어야 하는 tick저장
 int64_t next_wakeup_ticks;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -227,8 +229,7 @@ thread_create (const char *name, int priority,
 	return tid;
 }
 
-
-int cmp_awake_time(struct list_elem *e1, struct list_elem *e2){
+int cmp_awake_time(struct list_elem *e1, struct list_elem *e2, void *aux){
 	int64_t awake_time1 = list_entry(e1, struct thread, elem)->awake_time;
 	int64_t awake_time2 = list_entry(e2, struct thread, elem)->awake_time;
 	return awake_time1 < awake_time2;
