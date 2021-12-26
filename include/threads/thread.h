@@ -109,6 +109,7 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	// 스레드에 이름을 붙이고 싶을 때 사용 
 	int priority;                       /* Priority. */
+	int awake_time;
 	// ready queue에 있는 스레드를 running으로 바꾸는 순서 결정하는 값
 	
 	/* Shared between thread.c and synch.c. */
@@ -157,8 +158,12 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
+
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+
+void thread_sleep(int64_t);
+void thread_awake(int64_t);
 
 int thread_get_priority (void);
 void thread_set_priority (int);

@@ -28,7 +28,8 @@
    that are ready to run but not actually running. */
 // thread들의 대기 큐 -> 여기서 한 스레드 선택되어서 실행됨 
 static struct list ready_list;
-
+// sleep한 스레드가 들어가는 리스트 
+static struct list sleep_list;
 /* Idle thread. */
 // 아무 스레드도 실행되고 있지 않을때 돌아가는 스레드 
 static struct thread *idle_thread;
@@ -68,6 +69,7 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -117,6 +119,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -147,7 +150,6 @@ thread_start (void) {
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
-
 	/* Update statistics. */
 	if (t == idle_thread)
 		idle_ticks++;
@@ -220,6 +222,38 @@ thread_create (const char *name, int priority,
 	thread_unblock (t);
 
 	return tid;
+}
+
+void 
+thread_sleep(int64_t awake_time) {
+	enum intr_level old_level;
+	struct thread *t = thread_current();
+	
+	if (t == idle_thread) {
+		return;
+	}
+	t->awake_time = awake_time;
+	old_level = intr_disable ();
+	list_push_back (&sleep_list, &t->elem);
+	thread_block();
+	intr_set_level (old_level);	
+}
+
+   
+void 
+thread_awake(int64_t ticks) {
+	struct list_elem *e;
+	struct thread *t;
+	for (e = list_begin (&sleep_list); e != list_end (&sleep_list);){
+		t = list_entry(e, struct thread, elem);
+		if(t->awake_time <= ticks){
+			e = list_remove(e); 
+			thread_unblock(t);
+		}
+		else {
+			e = list_next(e);
+		}
+	}
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
@@ -390,7 +424,7 @@ idle (void *idle_started_ UNUSED) {
 		/* Let someone else run. */
 		intr_disable ();
 		thread_block ();
-
+		
 		/* Re-enable interrupts and wait for the next one.
 
 		   The `sti' instruction disables interrupts until the
@@ -433,6 +467,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->awake_time = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -442,8 +477,10 @@ init_thread (struct thread *t, const char *name, int priority) {
    idle_thread. */
 static struct thread *
 next_thread_to_run (void) {
+	// ready list가 비어있는 경우 -> idle thread반환
 	if (list_empty (&ready_list))
 		return idle_thread;
+	// 비어있지 않은 경우 ready list의 앞에서 빼서(FIFO) 스레드 반환
 	else
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
@@ -552,8 +589,11 @@ thread_launch (struct thread *th) {
 // 
 static void
 do_schedule(int status) {
+	// 스케쥴링 전에 인터럽트는 꺼져 있어야 함 
 	ASSERT (intr_get_level () == INTR_OFF);
+	// 현재 스레드의 상태가 RUNNING이어야 함. 
 	ASSERT (thread_current()->status == THREAD_RUNNING);
+	// 디스트럭션 요청의 리스트가 비어있지 않으면 
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
@@ -567,13 +607,17 @@ static void
 schedule (void) {
 	struct thread *curr = running_thread ();
 	struct thread *next = next_thread_to_run ();
-
+	// 인터럽트가 비활성화 되어있는지 체크 
 	ASSERT (intr_get_level () == INTR_OFF);
+	// THREAD_RUNNING이 아닌지 체크
 	ASSERT (curr->status != THREAD_RUNNING);
+	// 스레드 맞는지 체크(stack overflow)
 	ASSERT (is_thread (next));
+	// next_thread_to_run을 통해서 얻은 다음에 실행할 스레드의 상태를 RUNNING으로 바꿔줌
 	/* Mark us as running. */
 	next->status = THREAD_RUNNING;
 
+	// 현재 스레드의 tick을 초기화해서 0부터 다시 셀 수 있도록 함. 	
 	/* Start new time slice. */
 	thread_ticks = 0;
 
@@ -581,7 +625,7 @@ schedule (void) {
 	/* Activate the new address space. */
 	process_activate (next);
 #endif
-
+	// 현재 돌아가고 있는 스레드와 다음에 돌릴 스레드가 다르면 -> 동시성으로 인해 같아질수 있나? 
 	if (curr != next) {
 		/* If the thread we switched from is dying, destroy its struct
 		   thread. This must happen late so that thread_exit() doesn't
@@ -590,13 +634,16 @@ schedule (void) {
 		   currently used bye the stack.
 		   The real destruction logic will be called at the beginning of the
 		   schedule(). */
+		   // curr의 상태가 THREAD_DYING이고 initial thread가 아닌경우 
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
+			// Destruction req에 넣어줌 -> do_schedule에서 삭제 
 			list_push_back (&destruction_req, &curr->elem);
 		}
 
 		/* Before switching the thread, we first save the information
 		 * of current running. */
+		// 다음 스레드 시작
 		thread_launch (next);
 	}
 }
