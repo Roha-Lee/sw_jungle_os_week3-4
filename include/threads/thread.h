@@ -158,6 +158,8 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
+int64_t get_next_wakeup_ticks(void);
+void set_next_wakeup_ticks(int64_t);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);

@@ -60,6 +60,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 // true인 경우 multi-level feedback queue 스케쥴러 사용 
 // false인 경우 라운드 로빈 방식 스케쥴러 사용 
 bool thread_mlfqs;
+int64_t next_wakeup_ticks;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -69,7 +70,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
-
+int64_t get_next_wakeup_ticks(void);
+void set_next_wakeup_ticks(int64_t);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -121,6 +123,7 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&sleep_list);
 	list_init (&destruction_req);
+	next_wakeup_ticks = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -224,6 +227,14 @@ thread_create (const char *name, int priority,
 	return tid;
 }
 
+
+int cmp_awake_time(struct list_elem *e1, struct list_elem *e2){
+	int64_t awake_time1 = list_entry(e1, struct thread, elem)->awake_time;
+	int64_t awake_time2 = list_entry(e2, struct thread, elem)->awake_time;
+	return awake_time1 < awake_time2;
+}
+
+
 void 
 thread_sleep(int64_t awake_time) {
 	enum intr_level old_level;
@@ -234,7 +245,10 @@ thread_sleep(int64_t awake_time) {
 	}
 	t->awake_time = awake_time;
 	old_level = intr_disable ();
-	list_push_back (&sleep_list, &t->elem);
+
+	list_insert_ordered(&sleep_list, &t->elem, cmp_awake_time, NULL);
+	set_next_wakeup_ticks(awake_time);
+	// list_push_back (&sleep_list, &t->elem);
 	thread_block();
 	intr_set_level (old_level);	
 }
@@ -246,12 +260,14 @@ thread_awake(int64_t ticks) {
 	struct thread *t;
 	for (e = list_begin (&sleep_list); e != list_end (&sleep_list);){
 		t = list_entry(e, struct thread, elem);
+		// printf("thread: %d, wake time check %d\n", t->tid, t->awake_time);
 		if(t->awake_time <= ticks){
 			e = list_remove(e); 
 			thread_unblock(t);
 		}
 		else {
-			e = list_next(e);
+			set_next_wakeup_ticks(t->awake_time);
+			break;
 		}
 	}
 }
@@ -663,4 +679,13 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+int64_t get_next_wakeup_ticks(){
+	return next_wakeup_ticks;
+}
+
+
+void set_next_wakeup_ticks(int64_t new_wakeup_time){
+	next_wakeup_ticks = next_wakeup_ticks > new_wakeup_time ? new_wakeup_time : next_wakeup_ticks; 
 }

@@ -136,7 +136,9 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	thread_tick ();
 	
 	// 깨우기
-	thread_awake (ticks);
+	if (ticks >= get_next_wakeup_ticks()){
+		thread_awake (ticks);
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
