@@ -73,6 +73,7 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 static bool cmp_awake_time(struct list_elem *, struct list_elem *, void *);
+bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void *aux UNUSED);
 int64_t get_next_wakeup_ticks(void);
 void set_next_wakeup_ticks(int64_t);
 
@@ -242,7 +243,7 @@ static bool cmp_awake_time(struct list_elem *e1, struct list_elem *e2, void *aux
 	return awake_time1 < awake_time2;
 }
 
-static bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void *aux UNUSED){
+bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void *aux UNUSED){
 	int64_t priority1 = list_entry(e1, struct thread, elem)->priority;
 	int64_t priority2 = list_entry(e2, struct thread, elem)->priority;
 	return priority1 > priority2;
