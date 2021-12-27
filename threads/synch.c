@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+static bool cmp_sem_priority(struct list_elem *, struct list_elem*, void* UNUSED);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -287,7 +289,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	// list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -308,6 +311,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters)) 
+		list_sort(&cond->waiters, cmp_sem_priority, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 }
@@ -324,5 +328,14 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 	ASSERT (lock != NULL);
 
 	while (!list_empty (&cond->waiters))
+
 		cond_signal (cond, lock);
+}
+
+static bool cmp_sem_priority (struct list_elem* e1, struct list_elem* e2, void* aux UNUSED) {
+	struct list l1 = list_entry(e1, struct semaphore_elem, elem)->semaphore.waiters;
+	struct list l2 = list_entry(e2, struct semaphore_elem, elem)->semaphore.waiters;
+	int priority1 = list_entry(list_front(&l1), struct thread, elem)->priority;
+	int priority2 = list_entry(list_front(&l2), struct thread, elem)->priority;
+	return priority1 > priority2;
 }
