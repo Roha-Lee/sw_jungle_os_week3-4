@@ -72,6 +72,7 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+static bool cmp_awake_time(struct list_elem *, struct list_elem *, void *);
 int64_t get_next_wakeup_ticks(void);
 void set_next_wakeup_ticks(int64_t);
 
@@ -214,6 +215,7 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
+	// tf라는게 intr_frame인데, 이건 인터럽트 걸려서 context switching이 발생하는 작업이 저장된다. 
 	t->tf.rip = (uintptr_t) kernel_thread;
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
@@ -222,20 +224,31 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-
+	// 맨 처음에 스케쥴러에 의해 CPU들어가면 kernel_thread 실행 
+	
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	if(thread_current()->priority < priority){
+		thread_yield();
+	}
+	
 	return tid;
 }
 
-int cmp_awake_time(struct list_elem *e1, struct list_elem *e2, void *aux){
+static bool cmp_awake_time(struct list_elem *e1, struct list_elem *e2, void *aux UNUSED){
 	int64_t awake_time1 = list_entry(e1, struct thread, elem)->awake_time;
 	int64_t awake_time2 = list_entry(e2, struct thread, elem)->awake_time;
 	return awake_time1 < awake_time2;
 }
 
+static bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void *aux UNUSED){
+	int64_t priority1 = list_entry(e1, struct thread, elem)->priority;
+	int64_t priority2 = list_entry(e2, struct thread, elem)->priority;
+	return priority1 > priority2;
+}
 
+// [OS-1:ALARM CLOCK]
 void 
 thread_sleep(int64_t awake_time) {
 	enum intr_level old_level;
@@ -255,6 +268,7 @@ thread_sleep(int64_t awake_time) {
 }
 
    
+// [OS-1:ALARM CLOCK]   
 void 
 thread_awake(int64_t ticks) {
 	struct list_elem *e;
@@ -305,7 +319,10 @@ thread_unblock (struct thread *t) {
 	// thread가 block상태가 아니라면 에러 발생 
 	ASSERT (t->status == THREAD_BLOCKED);
 	// 대기 리스트에 넣어준다. 
-	list_push_back (&ready_list, &t->elem);
+	// FIFO 방식 
+	// list_push_back (&ready_list, &t->elem);
+	// priority scheduling
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 	// 스레드 상태 변경 
 	t->status = THREAD_READY;
 	// 인터럽트 활성화 
@@ -375,7 +392,8 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	// 현재 스레드가 아이들 스레드가 아니면 대기큐(ready list)에 현재 스레드의 elem을 넣어줌(일종의 키값)
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
+		// list_push_back (&ready_list, &curr->elem);
 	
 	do_schedule (THREAD_READY);
 	// 인터럽트 활성화 
@@ -385,7 +403,11 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	int ori_priority = thread_current()->priority;
 	thread_current ()->priority = new_priority;
+	if(ori_priority > new_priority){
+		test_max_priority();
+	}
 }
 
 /* Returns the current thread's priority. */
@@ -682,11 +704,23 @@ allocate_tid (void) {
 	return tid;
 }
 
-int64_t get_next_wakeup_ticks(){
+// [OS-1:ALARM CLOCK]
+int64_t get_next_wakeup_ticks (){
 	return next_wakeup_ticks;
 }
 
-
-void set_next_wakeup_ticks(int64_t new_wakeup_time){
+// [OS-1:ALARM CLOCK]
+void set_next_wakeup_ticks (int64_t new_wakeup_time){
 	next_wakeup_ticks = next_wakeup_ticks > new_wakeup_time ? new_wakeup_time : next_wakeup_ticks; 
+}
+
+void test_max_priority (void) {
+	int run_priority = thread_current()->priority;
+	if (list_empty (&ready_list)){
+		return;
+	}
+	int highest_priority = list_entry(list_front(&ready_list), struct thread, elem)->priority;
+	if (highest_priority > run_priority){
+		thread_yield();
+	}
 }
