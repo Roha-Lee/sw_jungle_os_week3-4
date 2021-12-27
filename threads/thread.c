@@ -268,7 +268,7 @@ thread_sleep(int64_t awake_time) {
 	intr_set_level (old_level);	
 }
 
-   
+
 // [OS-1:ALARM CLOCK]   
 void 
 thread_awake(int64_t ticks) {
