@@ -109,11 +109,17 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	// 스레드에 이름을 붙이고 싶을 때 사용 
 	int priority;                       /* Priority. */
-	int awake_time;
+	int ori_priority;					/* donation받기 이전의 원본 priority */ 
+	int awake_time;						/* Awake time */ 
 	// ready queue에 있는 스레드를 running으로 바꾸는 순서 결정하는 값
 	
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	struct list_elem d_elem;			/* donation list element */
+	struct list donations;				/* List for donator */
+
+	struct lock wait_on_lock;			/* 현재 lock 해제를 기다리고 있는 Lock */
+	
 	/* 
 		run queue의 원소로 사용되거나 semaphore wait의 원소로 사용.
 		동시에 두가지 기능을 할 수 있는 이유는 두 기능이 Mutually exclusive이기 때문이다. 

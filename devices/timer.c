@@ -138,6 +138,8 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	// 깨우기
 	if (ticks >= get_next_wakeup_ticks()){
 		thread_awake (ticks);
+		// yield를 인터럽트 핸들러 끝나고 수행 
+		intr_yield_on_return();
 	}
 }
 

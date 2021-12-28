@@ -128,6 +128,8 @@ thread_init (void) {
 	list_init (&sleep_list);
 	list_init (&destruction_req);
 	next_wakeup_ticks = INT64_MAX;
+	
+
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -386,7 +388,7 @@ void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
-	// 외부 인터럽트가 발생하면(응급상황에서만 발생한다고 함) 종료
+	
 	ASSERT (!intr_context ());
 
 	// 인터럽트를 비활성화
@@ -508,6 +510,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 	t->awake_time = 0;
+	init_lock(&t->wait_on_lock);
+	init_list(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
