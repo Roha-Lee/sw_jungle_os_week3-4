@@ -118,7 +118,7 @@ struct thread {
 	struct list_elem d_elem;			/* donation list element */
 	struct list donations;				/* List for donator */
 
-	struct lock wait_on_lock;			/* 현재 lock 해제를 기다리고 있는 Lock */
+	struct lock *wait_on_lock;			/* 현재 lock 해제를 기다리고 있는 Lock */
 	
 	/* 
 		run queue의 원소로 사용되거나 semaphore wait의 원소로 사용.
@@ -184,4 +184,10 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 bool cmp_priority(struct list_elem *, struct list_elem *, void *);
+bool cmp_donate_priority(struct list_elem *, struct list_elem*, void* UNUSED);
+
+void donate_priority(void);
+void remove_with_lock(struct lock *lock); 
+void refresh_priority(void);
+
 #endif /* threads/thread.h */

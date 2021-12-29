@@ -95,7 +95,7 @@ void set_next_wakeup_ticks(int64_t);
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
-
+bool cmp_donate_priority(struct list_elem *, struct list_elem*, void* UNUSED);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -406,11 +406,11 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	int ori_priority = thread_current()->priority;
-	thread_current ()->priority = new_priority;
-	if(ori_priority > new_priority){
-		test_max_priority();
-	}
+	struct thread * t = thread_current();
+	t->ori_priority = new_priority;
+	
+	refresh_priority();
+	test_max_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -508,10 +508,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->ori_priority = priority;
 	t->magic = THREAD_MAGIC;
 	t->awake_time = 0;
-	init_lock(&t->wait_on_lock);
-	init_list(&t->donations);
+	t->wait_on_lock = NULL;
+	list_init(&t->donations);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -719,6 +720,7 @@ void set_next_wakeup_ticks (int64_t new_wakeup_time){
 	next_wakeup_ticks = next_wakeup_ticks > new_wakeup_time ? new_wakeup_time : next_wakeup_ticks; 
 }
 
+
 void test_max_priority (void) {
 	int run_priority = thread_current()->priority;
 	if (list_empty (&ready_list)){
@@ -727,5 +729,56 @@ void test_max_priority (void) {
 	int highest_priority = list_entry(list_front(&ready_list), struct thread, elem)->priority;
 	if (highest_priority > run_priority){
 		thread_yield();
+	}
+}
+
+
+bool cmp_donate_priority(struct list_elem *e1, struct list_elem*e2, void* aux UNUSED){
+	int64_t priority1 = list_entry(e1, struct thread, d_elem)->priority;
+	int64_t priority2 = list_entry(e2, struct thread, d_elem)->priority;
+	return priority1 > priority2;
+}
+
+
+void donate_priority(void){
+	struct thread* current = thread_current();
+	
+	for(int depth = 0; depth < 8; depth++){
+		if(!current->wait_on_lock){
+			return;
+		}
+
+		struct thread* holder = current->wait_on_lock->holder;
+		holder->priority = current->priority;	
+		current = holder;
+	}
+}
+
+
+void remove_with_lock(struct lock *lock){
+	struct thread *current = thread_current();
+	struct list_elem *e;
+	for (e = list_begin (&current->donations); e != list_end (&current->donations);){	
+		if(list_entry(e, struct thread, d_elem)->wait_on_lock == lock){
+			e = list_remove(e); 
+		}
+		else{
+			e = list_next(e);
+		}
+	}
+}
+
+
+void refresh_priority(void){
+	struct thread *current = thread_current();
+	struct list_elem *e;
+	struct thread *max_pri_t;
+	current->priority = current->ori_priority;
+	if(!list_empty(&current->donations)){
+		list_sort(&current->donations, cmp_donate_priority, NULL);
+		max_pri_t = list_entry(list_front(&current->donations), struct thread, d_elem);  
+		if(current->priority < max_pri_t->priority){
+			current->priority = max_pri_t->priority;
+		}
 	}
 }

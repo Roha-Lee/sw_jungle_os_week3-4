@@ -194,9 +194,17 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-
+	struct thread * t = thread_current();
+	if (lock->holder) {
+		t->wait_on_lock = lock;
+		list_insert_ordered(&lock->holder->donations, &t->d_elem, cmp_donate_priority, NULL);
+		// list_push_back(&lock->holder->donations, &t->d_elem);
+		donate_priority();
+	}
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	
+	t->wait_on_lock = NULL;
+	lock->holder = t;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -229,6 +237,9 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	remove_with_lock(lock);
+	refresh_priority();
+	
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
@@ -290,7 +301,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	sema_init (&waiter.semaphore, 0);
 	// list_push_back (&cond->waiters, &waiter.elem);
-	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sem_priority, NULL);
+	list_insert_ordered(&cond->waiters, &waiter.elem, &cmp_sem_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -333,9 +344,11 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 }
 
 static bool cmp_sem_priority (struct list_elem* e1, struct list_elem* e2, void* aux UNUSED) {
-	struct list l1 = list_entry(e1, struct semaphore_elem, elem)->semaphore.waiters;
-	struct list l2 = list_entry(e2, struct semaphore_elem, elem)->semaphore.waiters;
-	int priority1 = list_entry(list_front(&l1), struct thread, elem)->priority;
-	int priority2 = list_entry(list_front(&l2), struct thread, elem)->priority;
+	struct list l1 = (list_entry(e1, struct semaphore_elem, elem)->semaphore.waiters);
+	struct list l2 = (list_entry(e2, struct semaphore_elem, elem)->semaphore.waiters);
+
+	int priority1 = list_entry(list_begin(&l1), struct thread, elem)->priority;
+	int priority2 = list_entry(list_begin(&l2), struct thread, elem)->priority;
 	return priority1 > priority2;
 }
+
