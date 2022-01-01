@@ -335,10 +335,21 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	// [project 2-1]
+	char *file_name_only, *next;
+	char *args = strtok_r(file_name, " ", &next);
+	strcpy(file_name_only, args);
+	int argc = 0;
+	char *argv[10]; // argv길이 조정해야함. 
+	while(args){
+		argv[argc++] = args;
+		args = strtok_r(file_name, " ", &next);
+	}
+
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (file_name_only);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", file_name_only);
 		goto done;
 	}
 
@@ -350,7 +361,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_version != 1
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
-		printf ("load: %s: error loading executable\n", file_name);
+		printf ("load: %s: error loading executable\n", file_name_only);
 		goto done;
 	}
 
@@ -416,6 +427,12 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	void **rsp = if_->rsp;
+	for(int n = argc - 1; n >= 0; n--){
+		int str_len = strlen(argv[n]);
+		rsp -= (str_len + 1);
+		memcpy(*rsp, argv[n], str_len + 1);
+	}
 
 	success = true;
 
