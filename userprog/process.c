@@ -178,7 +178,8 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
-
+	
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -201,6 +202,7 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+	while(1);
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
@@ -338,12 +340,12 @@ load (const char *file_name, struct intr_frame *if_) {
 	// [project 2-1]
 	char *file_name_only, *next;
 	char *args = strtok_r(file_name, " ", &next);
-	strcpy(file_name_only, args);
+	file_name_only = args;
 	int argc = 0;
-	char *argv[10]; // argv길이 조정해야함. 
+	char *argv[25]; // argv길이 조정해야함. 
 	while(args){
 		argv[argc++] = args;
-		args = strtok_r(file_name, " ", &next);
+		args = strtok_r(NULL, " ", &next);
 	}
 
 	/* Open executable file. */
@@ -427,13 +429,41 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-	void **rsp = if_->rsp;
+	
+	// [project 2-1]
+	// 인자 값 저장 
+	uint8_t **rspp = &(if_->rsp);
+	char* argv_addr[25];
 	for(int n = argc - 1; n >= 0; n--){
-		int str_len = strlen(argv[n]);
-		rsp -= (str_len + 1);
-		memcpy(*rsp, argv[n], str_len + 1);
+		int len = strlen(argv[n]) + 1;
+		*rspp -= len;
+		memcpy(*rspp, argv[n], len);
+		argv_addr[n] = *rspp;
+	}
+	
+	// padding
+	int padding = (int)*rspp % 8;
+	for(int i = 0; i < padding; i++){
+		(*rspp)--;
+		**rspp = (uint8_t)0;
 	}
 
+	// null for argv[argc] = 0
+	*rspp -= sizeof(char *);
+	*((char **)*rspp) = (char *)0; 
+
+	// argv
+	*rspp -= sizeof(char *) * argc;
+	memcpy(*rspp, argv_addr, argc * sizeof(char *));
+	
+	// fake return address 
+	*rspp -= sizeof(char *);
+	*((char **)*rspp) = (char *)0; 
+
+	// set %rsi -> &argv[0], %rdi -> argc
+	if_->R.rsi = argv_addr;
+	if_->R.rdi = argc;
+	
 	success = true;
 
 done:
