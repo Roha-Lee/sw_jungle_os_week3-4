@@ -1,3 +1,4 @@
+#define USERPROG // for conv
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -26,6 +27,22 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+
+// [Project 2-2]
+void check_address(void *addr){
+	struct thread *current = thread_current ();
+	
+	if (addr == NULL || is_kernel_vaddr(addr) || current->pml4){
+		// process 종료
+	}
+
+	
+}
+
+// [Project 2-2]
+void get_argument(void *esp, int *arg, int count){
+
+}
 
 /* General process initializer for initd and other process. */
 static void
@@ -186,7 +203,7 @@ process_exec (void *f_name) {
 		return -1;
 
 	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-	
+
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -463,7 +480,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	*((char **)*rspp) = (char *)0; 
 
 	// set %rsi -> &argv[0], %rdi -> argc
-	if_->R.rsi = argv_addr;
+	if_->R.rsi = *rspp + sizeof(char *);
 	if_->R.rdi = argc;
 	
 	success = true;
