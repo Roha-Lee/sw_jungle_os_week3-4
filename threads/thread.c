@@ -728,7 +728,12 @@ void test_max_priority (void) {
 	}
 	int highest_priority = list_entry(list_front(&ready_list), struct thread, elem)->priority;
 	if (highest_priority > run_priority){
-		thread_yield();
+		if (intr_context()){
+			intr_yield_on_return();
+		}
+		else{		
+			thread_yield();
+		}
 	}
 }
 
