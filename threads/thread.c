@@ -513,6 +513,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->awake_time = 0;
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
+
+	// [Project 2]
+	t->process_status = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

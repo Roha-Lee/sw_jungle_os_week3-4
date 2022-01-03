@@ -119,7 +119,8 @@ struct thread {
 	struct list donations;				/* List for donator */
 
 	struct lock *wait_on_lock;			/* 현재 lock 해제를 기다리고 있는 Lock */
-	
+	// [Project 2]
+	int process_status;
 	/* 
 		run queue의 원소로 사용되거나 semaphore wait의 원소로 사용.
 		동시에 두가지 기능을 할 수 있는 이유는 두 기능이 Mutually exclusive이기 때문이다. 

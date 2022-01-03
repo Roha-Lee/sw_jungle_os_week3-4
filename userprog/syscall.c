@@ -85,7 +85,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			check_address(f->R.rdi);
 			remove(f->R.rdi);
 			break;
-		
 		// case SYS_WRITE:
 		// 	check_address(f->R.rsi);
 		// 	f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
@@ -106,7 +105,8 @@ halt (void) {
 
 void
 exit (int status) {
-	int status = 0; 
+	struct thread *current = thread_current();
+	current->process_status = status;
 	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit ();
 }
