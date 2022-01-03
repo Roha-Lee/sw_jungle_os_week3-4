@@ -1,4 +1,3 @@
-#define USERPROG // for conv
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -27,22 +26,6 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-
-// [Project 2-2]
-void check_address(void *addr){
-	struct thread *current = thread_current ();
-	
-	if (addr == NULL || is_kernel_vaddr(addr) || current->pml4){
-		// process 종료
-	}
-
-	
-}
-
-// [Project 2-2]
-void get_argument(void *esp, int *arg, int count){
-
-}
 
 /* General process initializer for initd and other process. */
 static void
@@ -221,7 +204,8 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
-	while(1);
+	for(int i = 0; i < 100000000; i++);
+	// while(1);
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
