@@ -6,8 +6,9 @@
 #include "threads/loader.h"
 #include "threads/flags.h"
 #include "threads/synch.h"
-#include "threads/init.h" // power_off 부르기 위해  
-#include "filesys/filesys.h" // create, remove에서 함수 사용하기 위해 
+#include "threads/init.h" 
+#include "filesys/filesys.h"
+#include "filesys/file.h" 
 #include "userprog/gdt.h"
 #include "intrinsic.h"
 
@@ -197,7 +198,12 @@ open (const char *file){
 
 void 
 close (int fd){
-
+	struct file *close_file = fd_to_struct_filep(fd);
+	if(close_file == NULL){
+		return;
+	}
+	file_close(close_file);
+	remove_file_from_fd_table(close_file);
 }
 
 
