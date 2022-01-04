@@ -119,8 +119,6 @@ struct thread {
 	struct list donations;				/* List for donator */
 
 	struct lock *wait_on_lock;			/* 현재 lock 해제를 기다리고 있는 Lock */
-	// [Project 2]
-	int process_status;
 	
 	/* 
 		run queue의 원소로 사용되거나 semaphore wait의 원소로 사용.
@@ -129,10 +127,14 @@ struct thread {
 		semaphore wait list에 들어가려면 block state이다. 
 		스레드가 동시에 두가지 state를 가질 수 없으므로 elem을 통해 두가지 작업을 수행해도 문제가 생기지 않는다. 
 	*/ 
-#ifdef USERPROG
+// #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-#endif
+	// [Project 2]
+	int process_status;
+	struct file **fd_table;
+// #endif
+
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;

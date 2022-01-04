@@ -5,6 +5,7 @@
 #include "threads/thread.h"
 #include "threads/loader.h"
 #include "threads/flags.h"
+#include "threads/synch.h"
 #include "threads/init.h" // power_off 부르기 위해  
 #include "filesys/filesys.h" // create, remove에서 함수 사용하기 위해 
 #include "userprog/gdt.h"
@@ -13,16 +14,22 @@
 #define	STDIN_FILENO	0
 #define	STDOUT_FILENO	1
 
+#define MAX_FD_NUM	(1<<9)
 void check_address(void *addr);
 struct file *fd_to_struct_filep(int fd);
+int add_file_to_fd_table(struct file *file);
+void remove_file_from_fd_table(int fd);
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
 void halt (void);
 void exit (int);
+void close (int fd);
 bool create (const char *file , unsigned initial_size);
 bool remove (const char *file);
+int open (const char *file);
+int write (int fd, const void *buffer, unsigned size);
 
 /* System call.
  *
@@ -37,6 +44,7 @@ bool remove (const char *file);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+struct lock filesys_lock;
 
 // [Project 2-2]
 void check_address(void *addr){
@@ -59,6 +67,8 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	
+	lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -89,18 +99,51 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			check_address(f->R.rdi);
 			f->R.rax = remove(f->R.rdi);
 			break;
-		
 		case SYS_WRITE:
 			check_address(f->R.rsi);
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
+		case SYS_OPEN:
+			check_address(f->R.rdi);
+			f->R.rax = open(f->R.rdi);
+			break;
+		case SYS_CLOSE:
+			close(f->R.rdi);
 		default:
 			break;
-	}
-	
-	
+	}	
 }
 
+struct file *
+fd_to_struct_filep(int fd) {
+	if (fd < 0 || fd >= MAX_FD_NUM){
+		return NULL;
+	}
+	struct thread * current = thread_current();
+	return current->fd_table[fd];
+}
+
+int 
+add_file_to_fd_table(struct file *file){
+	int fd = 2;
+	struct thread * current = thread_current();
+	while(current->fd_table[fd] != NULL && fd < MAX_FD_NUM){
+		fd++;
+	}
+	if(fd >= MAX_FD_NUM){
+		return -1;
+	}
+	current->fd_table[fd] = file;
+	return fd;
+}
+
+void remove_file_from_fd_table(int fd){
+	struct thread * current = thread_current();
+	if (fd < 0 || fd >= MAX_FD_NUM){
+		return;
+	}	
+	current->fd_table[fd] = NULL;
+}
 
 void
 halt (void) {
@@ -117,15 +160,21 @@ exit (int status) {
 }
 
 
-bool create (const char *file , unsigned initial_size){
-	return filesys_create(file, initial_size);
+bool 
+create (const char *file , unsigned initial_size){
+	lock_acquire(&filesys_lock);
+	bool return_value = filesys_create(file, initial_size);
+	lock_release(&filesys_lock);
+	return return_value;
 }
 
-bool remove (const char *file){
-	return filesys_remove(file);
+bool 
+remove (const char *file){
+	lock_acquire(&filesys_lock);
+	bool return_value = filesys_remove(file);
+	lock_release(&filesys_lock);
+	return return_value;
 }
-// struct file *fd_to_struct_filep(int fd){
-// }
 
 int 
 write (int fd, const void *buffer, unsigned size){
@@ -133,6 +182,22 @@ write (int fd, const void *buffer, unsigned size){
 		putbuf(buffer, size);
 		return size;
 	}
+}
+
+int 
+open (const char *file){
+	lock_acquire(&filesys_lock);
+	struct file * open_file = filesys_open(file);
+	lock_release(&filesys_lock);
+	if(open_file == NULL){
+		return -1;
+	}
+	return add_file_to_fd_table(open_file);
+}
+
+void 
+close (int fd){
+
 }
 
 
