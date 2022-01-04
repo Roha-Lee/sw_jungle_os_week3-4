@@ -9,6 +9,10 @@
 #include "filesys/filesys.h" // create, remove에서 함수 사용하기 위해 
 #include "userprog/gdt.h"
 #include "intrinsic.h"
+
+#define	STDIN_FILENO	0
+#define	STDOUT_FILENO	1
+
 void check_address(void *addr);
 struct file *fd_to_struct_filep(int fd);
 
@@ -61,7 +65,7 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
-	printf ("system call! %d\n", f->R.rax);
+	// printf ("system call! %d\n", f->R.rax);
 	int syscall_no = f->R.rax;
 	// a1 = f->R.rdi
 	// a2 = f->R.rsi
@@ -79,16 +83,17 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_CREATE:
 			check_address(f->R.rdi);
-			create(f->R.rdi, f->R.rsi);
+			f->R.rax = create(f->R.rdi, f->R.rsi);
 			break;
 		case SYS_REMOVE:
 			check_address(f->R.rdi);
-			remove(f->R.rdi);
+			f->R.rax = remove(f->R.rdi);
 			break;
-		// case SYS_WRITE:
-		// 	check_address(f->R.rsi);
-		// 	f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
-		// 	break;
+		
+		case SYS_WRITE:
+			check_address(f->R.rsi);
+			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
 		default:
 			break;
 	}
@@ -122,10 +127,12 @@ bool remove (const char *file){
 // struct file *fd_to_struct_filep(int fd){
 // }
 
-// int 
-// write (int fd, const void *buffer, unsigned size){
-// 	// struct file *f; // some function that maps df to struct file *file;
-// 	// file_write_at(f);
-// }
+int 
+write (int fd, const void *buffer, unsigned size){
+	if(fd == STDOUT_FILENO){
+		putbuf(buffer, size);
+		return size;
+	}
+}
 
 
