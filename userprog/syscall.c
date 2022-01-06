@@ -33,6 +33,7 @@ int open (const char *file);
 int write (int fd, const void *buffer, unsigned size);
 int filesize (int fd);
 unsigned tell (int fd);
+void seek (int fd, unsigned position);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -117,6 +118,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_READ:
 			break;
 		case SYS_SEEK:
+			seek (f->R.rdi, f->R.rsi);
 			break;
 		case SYS_TELL:
 			f->R.rax = tell (f->R.rdi);
@@ -241,4 +243,15 @@ tell (int fd){
 	off_t return_val = file_tell(f);
 	lock_release(&filesys_lock);
 	return (unsigned) return_val;
+}
+
+void 
+seek (int fd, unsigned position){
+	struct file *f = fd_to_struct_filep(fd);
+	if(f == NULL){
+		return 0;
+	}
+	lock_acquire(&filesys_lock);
+	file_seek(f, (off_t) position);
+	lock_release(&filesys_lock);
 }
