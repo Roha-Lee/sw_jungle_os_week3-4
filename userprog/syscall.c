@@ -30,10 +30,12 @@ void close (int fd);
 bool create (const char *file , unsigned initial_size);
 bool remove (const char *file);
 int open (const char *file);
+int read (int fd, void *buffer, unsigned size);
 int write (int fd, const void *buffer, unsigned size);
 int filesize (int fd);
 unsigned tell (int fd);
 void seek (int fd, unsigned position);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -104,6 +106,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_WRITE:
 			check_address(f->R.rsi);
+			check_address(f->R.rsi + f->R.rdx - 1);
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		case SYS_OPEN:
@@ -116,12 +119,21 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = filesize (f->R.rdi);
 			break;
 		case SYS_READ:
+			check_address(f->R.rsi);
+			check_address(f->R.rsi + f->R.rdx - 1);
+			f->R.rax = read (f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		case SYS_SEEK:
 			seek (f->R.rdi, f->R.rsi);
 			break;
 		case SYS_TELL:
 			f->R.rax = tell (f->R.rdi);
+			break;
+		case SYS_WAIT:
+			break;
+		case SYS_EXEC:
+			break;
+		case SYS_FORK:
 			break;
 		default:
 			break;
@@ -191,10 +203,52 @@ remove (const char *file){
 }
 
 int 
+read (int fd, void *buffer, unsigned size) {
+	off_t read_byte;
+	uint8_t *read_buffer = buffer;
+	if(fd == STDIN_FILENO) {
+		char key;
+		for (read_byte = 0; read_byte < size; read_byte++){
+			key = input_getc();
+			*read_buffer++ = key;
+			if(key == '\0'){
+				break;
+			}
+		}
+	}
+	else if(fd == STDOUT_FILENO){
+		return -1;
+	}
+	else {
+		struct file * read_file = fd_to_struct_filep(fd);
+		if(read_file == NULL){
+			return -1;
+		}
+		lock_acquire(&filesys_lock);
+		read_byte = file_read(read_file, buffer, size);
+		lock_release(&filesys_lock);
+	}
+	return read_byte;
+}
+
+int 
 write (int fd, const void *buffer, unsigned size){
-	if(fd == STDOUT_FILENO){
+	if (fd == STDIN_FILENO) {
+		return 0;
+	}
+	else if(fd == STDOUT_FILENO){
 		putbuf(buffer, size);
 		return size;
+	}
+	else {
+		struct file * write_file = fd_to_struct_filep(fd);
+		if(write_file == NULL){
+			return 0;
+		}
+		lock_acquire(&filesys_lock);
+		off_t write_byte = file_write(write_file, buffer, size);
+		lock_release(&filesys_lock);
+		return write_byte;
 	}
 }
 
