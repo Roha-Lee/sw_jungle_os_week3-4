@@ -31,6 +31,7 @@ bool create (const char *file , unsigned initial_size);
 bool remove (const char *file);
 int open (const char *file);
 int write (int fd, const void *buffer, unsigned size);
+int filesize (int fd);
 
 /* System call.
  *
@@ -110,6 +111,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_CLOSE:
 			close(f->R.rdi);
+		case SYS_FILESIZE:
+			f->R.rax = filesize (f->R.rdi);
+			break;
+		case SYS_READ:
+			break;
+		case SYS_SEEK:
+			break;
+		case SYS_TELL:
+			break;
 		default:
 			break;
 	}	
@@ -202,8 +212,17 @@ close (int fd){
 	if(close_file == NULL){
 		return;
 	}
+	lock_acquire(&filesys_lock);
 	file_close(close_file);
+	lock_release(&filesys_lock);
 	remove_file_from_fd_table(close_file);
 }
 
-
+int 
+filesize (int fd){
+	struct file *f = fd_to_struct_filep(fd);
+	if(f == NULL) {
+		return -1;
+	}
+	return file_length(f);
+}
