@@ -218,7 +218,7 @@ close (int fd){
 	lock_acquire(&filesys_lock);
 	file_close(close_file);
 	lock_release(&filesys_lock);
-	remove_file_from_fd_table(close_file);
+	remove_file_from_fd_table(fd);
 }
 
 int 
