@@ -52,7 +52,8 @@ void seek (int fd, unsigned position);
 struct lock filesys_lock;
 
 // [Project 2-2]
-void check_address(void *addr){
+void 
+check_address(void *addr){
 	struct thread *current = thread_current ();
 	
 	if (addr == NULL || is_kernel_vaddr(addr) || pml4e_walk(current->pml4, addr, false) == NULL){
@@ -82,6 +83,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	// printf ("system call! %d\n", f->R.rax);
 	int syscall_no = f->R.rax;
+	struct thread * current = thread_current();
+
 	// a1 = f->R.rdi
 	// a2 = f->R.rsi
 	// a3 = f->R.rdx
@@ -163,7 +166,8 @@ add_file_to_fd_table(struct file *file){
 	return fd;
 }
 
-void remove_file_from_fd_table(int fd){
+void 
+remove_file_from_fd_table(int fd){
 	struct thread * current = thread_current();
 	if (fd < 0 || fd >= MAX_FD_NUM){
 		return;
@@ -260,7 +264,11 @@ open (const char *file){
 	if(open_file == NULL){
 		return -1;
 	}
-	return add_file_to_fd_table(open_file);
+	int fd = add_file_to_fd_table(open_file);
+	if (fd == -1){
+		file_close(open_file);
+	}
+	return fd;
 }
 
 void 
