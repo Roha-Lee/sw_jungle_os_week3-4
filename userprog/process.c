@@ -95,6 +95,14 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
 struct thread * get_child(int pid){
 	struct thread *current = thread_current();	
+	struct list *child_list = &current->child_list;
+	for(struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if(t->tid == pid){
+			return t;
+		}
+	}
+	return NULL;
 }
 
 #ifndef VM
@@ -246,6 +254,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
 	return -1;
 }
 
