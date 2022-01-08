@@ -1,4 +1,5 @@
 #include "userprog/syscall.h"
+#include "userprog/process.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -12,10 +13,7 @@
 #include "userprog/gdt.h"
 #include "intrinsic.h"
 
-#define	STDIN_FILENO	0
-#define	STDOUT_FILENO	1
 
-#define MAX_FD_NUM	(1<<9)
 void check_address(void *addr);
 struct file *fd_to_struct_filep(int fd);
 int add_file_to_fd_table(struct file *file);
@@ -35,7 +33,7 @@ int write (int fd, const void *buffer, unsigned size);
 int filesize (int fd);
 unsigned tell (int fd);
 void seek (int fd, unsigned position);
-
+int fork (const char *thread_name, struct intr_frame *tf);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -135,8 +133,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_WAIT:
 			break;
 		case SYS_EXEC:
+			check_address(f->R.rdi);
 			break;
 		case SYS_FORK:
+			check_address(f->R.rdi);
+			f->R.rax = fork(f->R.rdi, f);
 			break;
 		default:
 			break;
@@ -184,7 +185,7 @@ halt (void) {
 void
 exit (int status) {
 	struct thread *current = thread_current();
-	current->process_status = status;
+	current->exit_status = status;
 	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit ();
 }
@@ -316,4 +317,9 @@ seek (int fd, unsigned position){
 	lock_acquire(&filesys_lock);
 	file_seek(f, (off_t) position);
 	lock_release(&filesys_lock);
+}
+
+int
+fork (const char *thread_name, struct intr_frame *tf){
+	process_fork(thread_name, tf);
 }

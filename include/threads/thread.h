@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -131,8 +132,12 @@ struct thread {
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	// [Project 2]
-	int process_status;
+	int exit_status;
 	struct file **fd_table;
+	struct list child_list;
+	struct list_elem child_elem;
+	struct semaphore sema_fork;
+	struct intr_frame parent_if;
 // #endif
 
 #ifdef VM

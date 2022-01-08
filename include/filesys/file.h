@@ -1,6 +1,10 @@
 #ifndef FILESYS_FILE_H
 #define FILESYS_FILE_H
 
+#define	STDIN_FILENO	0
+#define	STDOUT_FILENO	1
+#define MAX_FD_NUM	(1<<9)
+
 #include "filesys/off_t.h"
 
 struct inode;

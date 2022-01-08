@@ -524,7 +524,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init(&t->donations);
 
 	// [Project 2]
-	t->process_status = 0;
+	t->exit_status = 0;
+	list_init(&t->child_list);
+	sema_init(&t->sema_fork, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
