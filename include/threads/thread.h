@@ -137,7 +137,10 @@ struct thread {
 	struct list child_list;
 	struct list_elem child_elem;
 	struct semaphore sema_fork;
+	struct semaphore sema_wait;
+	struct semaphore sema_free;
 	struct intr_frame parent_if;
+	bool is_waited;
 // #endif
 
 #ifdef VM

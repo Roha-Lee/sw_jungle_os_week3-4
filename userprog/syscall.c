@@ -34,6 +34,7 @@ int filesize (int fd);
 unsigned tell (int fd);
 void seek (int fd, unsigned position);
 int fork (const char *thread_name, struct intr_frame *tf);
+int wait (tid_t child_tid);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -131,6 +132,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = tell (f->R.rdi);
 			break;
 		case SYS_WAIT:
+			f->R.rax = wait (f->R.rdi);
 			break;
 		case SYS_EXEC:
 			check_address(f->R.rdi);
@@ -321,5 +323,10 @@ seek (int fd, unsigned position){
 
 int
 fork (const char *thread_name, struct intr_frame *tf){
-	process_fork(thread_name, tf);
+	return process_fork(thread_name, tf);
+}
+
+int 
+wait (tid_t child_tid){
+	return process_wait(child_tid);
 }

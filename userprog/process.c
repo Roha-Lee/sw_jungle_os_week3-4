@@ -87,9 +87,9 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	}
 	struct thread * child = get_child(pid);
 	sema_down(&child->sema_fork);
-	// if (child->process_status == -1)
-	// 	return TID_ERROR;
-
+	if (child->exit_status == -1){
+		return TID_ERROR;
+	}
 	return pid;
 }
 
@@ -118,7 +118,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
 	if (is_kernel_vaddr(va)){
-		return false;
+		return true;
 	}
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
@@ -199,6 +199,7 @@ __do_fork (void *aux) {
 	if (succ)
 		do_iret (&if_);
 error:
+	
 	thread_exit ();
 }
 
@@ -249,13 +250,26 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
-	for(int i = 0; i < 100000000; i++);
+	// for(int i = 0; i < 100000000; i++);
 	// while(1);
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-
-	return -1;
+	struct thread * child = get_child(child_tid);
+	if(child == NULL){
+		return -1;
+	}
+	if(child->is_waited){
+		return -1;
+	}
+	else {
+		child->is_waited = true;
+	}
+	sema_down(&child->sema_wait);
+	int exit_status = child->exit_status;
+	list_remove(&child->child_elem);
+	sema_up(&child->sema_free);
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -266,8 +280,14 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	sema_up(&curr->sema_fork);
+	for (int i = 2; i < MAX_FD_NUM; i++){
+		close(i);
+	}
+	palloc_free_page(curr->fd_table);
 	process_cleanup ();
+	sema_up(&curr->sema_wait);
+	sema_up(&curr->sema_fork);
+	sema_down(&curr->sema_free);
 }
 
 /* Free the current process's resources. */
