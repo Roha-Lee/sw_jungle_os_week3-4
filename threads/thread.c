@@ -216,6 +216,7 @@ thread_create (const char *name, int priority,
 	// allocate_tid는 카운터이므로 1증가된 값 반환 
 	tid = t->tid = allocate_tid ();
 
+	// t->fd_table = palloc_get_page (PAL_ZERO);
 	t->fd_table = palloc_get_page (PAL_ZERO);
 	if(t->fd_table == NULL){
 		palloc_free_page(t);
@@ -531,6 +532,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	sema_init(&t->sema_wait, 0);
 	sema_init(&t->sema_free, 0);
 	t->is_waited = false;
+	t->executable = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

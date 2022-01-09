@@ -141,6 +141,7 @@ struct thread {
 	struct semaphore sema_free;
 	struct intr_frame parent_if;
 	bool is_waited;
+	struct file * executable;
 // #endif
 
 #ifdef VM

@@ -81,7 +81,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	struct thread * parent = thread_current();
 	memcpy(&parent->parent_if, if_, sizeof(struct intr_frame));
-	tid_t pid = thread_create (name, PRI_DEFAULT, __do_fork, parent);
+	tid_t pid = thread_create (name, parent->priority, __do_fork, parent);
 	if(pid == TID_ERROR){
 		return TID_ERROR;
 	}
@@ -189,7 +189,11 @@ __do_fork (void *aux) {
 		if (f == NULL){
 			continue;
 		}
+		
 		current->fd_table[i] = file_duplicate(f);
+		if(current->fd_table[i] == NULL){
+			goto error;
+		}
 	}
 	
 	sema_up(&current->sema_fork);
@@ -283,11 +287,13 @@ process_exit (void) {
 	for (int i = 2; i < MAX_FD_NUM; i++){
 		close(i);
 	}
-	palloc_free_page(curr->fd_table);
-	process_cleanup ();
+	file_close(curr->executable);
 	sema_up(&curr->sema_wait);
 	sema_up(&curr->sema_fork);
 	sema_down(&curr->sema_free);
+	palloc_free_page(curr->fd_table);
+	process_cleanup ();
+	
 }
 
 /* Free the current process's resources. */
@@ -489,6 +495,9 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
+	t->executable = file;
+	file_deny_write(file);
+
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
@@ -538,7 +547,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// file_close (file); // -> process_exit으로이동
 	return success;
 }
 

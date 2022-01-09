@@ -8,6 +8,7 @@
 #include "threads/flags.h"
 #include "threads/synch.h"
 #include "threads/init.h" 
+#include "threads/palloc.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h" 
 #include "userprog/gdt.h"
@@ -35,6 +36,7 @@ unsigned tell (int fd);
 void seek (int fd, unsigned position);
 int fork (const char *thread_name, struct intr_frame *tf);
 int wait (tid_t child_tid);
+int exec (const char *cmd_line);
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -136,6 +138,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_EXEC:
 			check_address(f->R.rdi);
+			f->R.rax = exec(f->R.rdi);
+			if(f->R.rax == -1){
+				exit(-1);
+			}
 			break;
 		case SYS_FORK:
 			check_address(f->R.rdi);
@@ -248,6 +254,7 @@ write (int fd, const void *buffer, unsigned size){
 		return size;
 	}
 	else {
+		
 		struct file * write_file = fd_to_struct_filep(fd);
 		if(write_file == NULL){
 			return 0;
@@ -269,7 +276,9 @@ open (const char *file){
 	}
 	int fd = add_file_to_fd_table(open_file);
 	if (fd == -1){
+		lock_acquire(&filesys_lock);
 		file_close(open_file);
+		lock_release(&filesys_lock);
 	}
 	return fd;
 }
@@ -329,4 +338,16 @@ fork (const char *thread_name, struct intr_frame *tf){
 int 
 wait (tid_t child_tid){
 	return process_wait(child_tid);
+}
+
+int exec (const char *cmd_line){
+	int size = strlen(cmd_line) + 1;
+	char *fn_copy = palloc_get_page (PAL_ZERO);
+	if (fn_copy == NULL){
+		return -1;
+	}
+	strlcpy (fn_copy, cmd_line, PGSIZE);
+	if (process_exec (fn_copy) < 0){
+		return -1;
+	}
 }
