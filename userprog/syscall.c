@@ -149,6 +149,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			f->R.rax = fork(f->R.rdi, f);
 			break;
 		default:
+			exit(-1);
 			break;
 	}	
 }

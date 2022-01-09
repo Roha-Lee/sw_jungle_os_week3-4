@@ -55,6 +55,7 @@ process_create_initd (const char *file_name) {
 	char *token, *next;
 	token = strtok_r(file_name, " ", &next);
 	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
+	
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -269,11 +270,14 @@ process_wait (tid_t child_tid UNUSED) {
 	else {
 		child->is_waited = true;
 	}
-	sema_down(&child->sema_wait);
-	int exit_status = child->exit_status;
-	list_remove(&child->child_elem);
-	sema_up(&child->sema_free);
-	return exit_status;
+	if(child_tid == child->tid){
+		sema_down(&child->sema_wait);
+		int exit_status = child->exit_status;
+		list_remove(&child->child_elem);
+		sema_up(&child->sema_free);
+		return exit_status;
+	}
+	return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
