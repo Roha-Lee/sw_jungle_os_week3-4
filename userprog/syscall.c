@@ -119,6 +119,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		case SYS_CLOSE:
 			close(f->R.rdi);
+			break;
 		case SYS_FILESIZE:
 			f->R.rax = filesize (f->R.rdi);
 			break;
