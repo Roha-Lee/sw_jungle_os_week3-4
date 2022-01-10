@@ -31,6 +31,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct list all_list;
+
 /* List of processes in THREAD_BLOCKED state, that is, processes
    that are ready to be waiting for something. */
 static struct list blocked_list;
@@ -85,6 +87,7 @@ static tid_t allocate_tid (void);
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
 
 
+
 // Global descriptor table for the thread_start.
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
@@ -118,13 +121,15 @@ thread_init (void) {
 
 	/* Init the global thread context */
 	lock_init (&tid_lock);
+
+	list_init(&all_list);
 	list_init (&ready_list);
 	list_init (&blocked_list);
 	list_init (&destruction_req);
 	next_tick_to_awake = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
-	initial_thread = running_thread ();
+	initial_thread =  running_thread();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
@@ -234,10 +239,14 @@ tid_t thread_create(const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock(t);
+
+	/*
 	if (thread_current()->priority < t->priority)
 	{
 		thread_yield();
 	}
+	*/
+	thread_test_preemption();
 	return tid;
 }
 
@@ -284,11 +293,11 @@ thread_name (void) {
 }
 
 /* Returns the running thread.
-   This is running_thread() plus a couple of sanity checks.
+   This is () plus a couple of sanity checks.
    See the big comment at the top of thread.h for details. */
 struct thread *
 thread_current (void) {
-	struct thread *t = running_thread ();
+	struct thread *t =  running_thread();
 
 	/* Make sure T is really a thread.
 	   If either of these assertions fire, then your thread may
@@ -316,6 +325,7 @@ thread_exit (void) {
 #ifdef USERPROG
 	process_exit ();
 #endif
+	list_remove(&thread_current()->allelem);
 
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
@@ -445,6 +455,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 
+	list_push_back(&all_list, &t->allelem);
+
+	
 	/* priority donation */
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
@@ -514,7 +527,7 @@ do_iret (struct intr_frame *tf) {
    added at the end of the function. */
 static void
 thread_launch (struct thread *th) {
-	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
+	uint64_t tf_cur = (uint64_t) & running_thread()->tf;
 	uint64_t tf = (uint64_t) &th->tf;
 	ASSERT (intr_get_level () == INTR_OFF);
 
@@ -590,7 +603,7 @@ do_schedule(int status) {
 
 static void
 schedule (void) {
-	struct thread *curr = running_thread ();
+	struct thread *curr = running_thread();
 	struct thread *next = next_thread_to_run ();
 
 	ASSERT (intr_get_level () == INTR_OFF);

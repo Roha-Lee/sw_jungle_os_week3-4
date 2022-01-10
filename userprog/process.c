@@ -27,6 +27,10 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+static void 
+process_init (void){
+	struct thread *current = thread_current();
+}
 /* Search current thread's child_list and return child with pid. Return NULL if not found. */
 struct thread *get_child_with_pid(int pid)
 {
@@ -76,7 +80,7 @@ initd (void *f_name) {
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-
+	process_init();
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -256,7 +260,12 @@ __do_fork(void *aux)
 		if (!found)
 		{
 			struct file *new_file;
-			
+			if (file > 2)
+				new_file = file_duplicate(file);
+			else
+				new_file = file; // 1 STDIN, 2 STDOUT
+			current->fdTable[i] = new_file;
+		
 		}
 	}
 	current->fdIdx = parent->fdIdx;
@@ -405,7 +414,7 @@ int process_wait(tid_t child_tid UNUSED)
 	int exit_status = child->exit_status;
 
 	// Keep child page so parent can get exit_status
-	//list_remove(&child->child_elem);
+	list_remove(&child->child_elem);
 	sema_up(&child->free_sema); // wake-up child in process_exit - proceed with thread_exit
 	return exit_status;
 }
