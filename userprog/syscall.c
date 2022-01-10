@@ -50,8 +50,6 @@ int exec (const char *cmd_line);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
-struct lock filesys_lock;
-
 // [Project 2-2]
 void 
 check_address(void *addr){

@@ -214,7 +214,6 @@ int
 process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
-
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -227,8 +226,9 @@ process_exec (void *f_name) {
 	process_cleanup ();
 
 	/* And then load the binary */
+	lock_acquire(&filesys_lock);
 	success = load (file_name, &_if);
-	
+	lock_release(&filesys_lock);
 	
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -435,6 +435,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Read and verify executable header. */
+	t->executable = file;
+	file_deny_write(file);
+
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -442,7 +445,9 @@ load (const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_version != 1
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
+		
 		printf ("load: %s: error loading executable\n", file_name_only);
+		
 		goto done;
 	}
 
@@ -454,7 +459,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		if (file_ofs < 0 || file_ofs > file_length (file))
 			goto done;
 		file_seek (file, file_ofs);
-
+		
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
 		file_ofs += sizeof phdr;
@@ -499,9 +504,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
-	t->executable = file;
-	file_deny_write(file);
-
+	
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
