@@ -102,7 +102,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+	lock_acquire(&spt->hash_lock);
 	struct hash_elem *e = hash_insert(&spt->pages, &page->hash_elem);
+	lock_release(&spt->hash_lock);
 	if (e == NULL){
 		succ = true;
 	}
@@ -142,7 +144,18 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-
+	
+	void * newpage = palloc_get_page(PAL_USER); 
+	if(newpage == NULL) {
+		// eviction
+		PANIC("todo");
+	}
+	else {
+		frame = malloc(sizeof (struct frame));
+		frame->kva = newpage;
+		frame->page = NULL;
+	}
+	
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
