@@ -119,14 +119,15 @@ struct thread {
 	struct intr_frame parent_if;  // 자신의 intr_frame을 보존하고 fork시에 child 프로세스에 전달.
 	int stdin_count;
 	int stdout_count;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 #endif
-#ifdef VM
+// #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
-#endif
+// #endif
 
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
