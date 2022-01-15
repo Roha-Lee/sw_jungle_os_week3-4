@@ -196,7 +196,11 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-
+	struct thread *current = thread_current();
+	struct page *p = spt_find_page(&current->spt, va);
+	if(p == NULL){
+		return false;
+	}
 	return vm_do_claim_page (page);
 }
 
