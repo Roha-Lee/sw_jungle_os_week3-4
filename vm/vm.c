@@ -2,6 +2,7 @@
 
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
+#include "threads/mmu.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
 
@@ -214,7 +215,10 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
+	struct thread * current = thread_current();
+	if(!pml4_set_page(current->pml4, page->va, frame->kva, page->writable)) {
+		return false;
+	}
 	return swap_in (page, frame->kva);
 }
 
