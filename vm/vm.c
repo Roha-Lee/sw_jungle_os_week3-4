@@ -187,7 +187,16 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-
+	if (user && is_kernel_vaddr(addr)) {
+		return false;
+	}
+	struct page * fault_page = spt_find_page(spt, addr);
+	if (fault_page == NULL) {
+		return false;
+	}
+	if (write && !fault_page->writable) {
+		return false;
+	}
 	return vm_do_claim_page (page);
 }
 
