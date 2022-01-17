@@ -774,12 +774,30 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
+	
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-
+	success = vm_alloc_page(VM_ANON | VM_STACK, stack_bottom, true);
+	if (success) {
+		if (vm_claim_page(stack_bottom)) {
+			if_->rsp = USER_STACK;
+		}
+		else {
+			// 페이지 할당 성공 but 내어줄 frame이 없는 경우 
+			printf("lack of physical memory.");
+			success = false;
+		}
+	}
+	else {
+		// 이미 stack_bottom에 해당하는 페이지가 있는 경우 
+		printf("stack already ready.");
+	}
+	
+	if(success) {
+		if_->rsp = USER_STACK;
+	}
 	return success;
 }
 #endif /* VM */

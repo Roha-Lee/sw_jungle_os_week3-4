@@ -84,7 +84,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		spt_insert_page(spt, newpage);
 		return true;
 	}
-err:
 	return false;
 }
 
