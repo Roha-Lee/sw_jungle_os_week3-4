@@ -258,10 +258,11 @@ process_exec (void *f_name) {
 	}
 	// 유저스택에 인자 넣기
 	void **rspp = &_if.rsp;
+	hex_dump(_if.rsp, _if.rsp, 53, true);
 	argument_stack(argv, argc, rspp);
 	_if.R.rdi = argc;
 	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
-
+	
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -793,10 +794,7 @@ setup_stack (struct intr_frame *if_) {
 	else {
 		// 이미 stack_bottom에 해당하는 페이지가 있는 경우 
 		printf("stack already ready.");
-	}
-	
-	if(success) {
-		if_->rsp = USER_STACK;
+		success = false;
 	}
 	return success;
 }

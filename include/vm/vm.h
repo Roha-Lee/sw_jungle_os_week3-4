@@ -2,6 +2,7 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "threads/synch.h"
 #include <hash.h>
 #include "lib/kernel/hash.h"
 

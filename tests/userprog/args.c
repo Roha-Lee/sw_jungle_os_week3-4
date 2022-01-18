@@ -4,12 +4,11 @@
    output. */
 
 #include "tests/lib.h"
-
+#include <stdio.h>
 int
 main (int argc, char *argv[]) 
 {
   int i;
-
   test_name = "args";
 
   if (((unsigned long long) argv & 7) != 0)

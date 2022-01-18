@@ -93,9 +93,10 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	
 	/* TODO: Fill this function. */
-	page->va = pg_round_down(va);
+	struct page empty_page;
+	empty_page.va = pg_round_down(va);
 	lock_acquire(&spt->hash_lock);
-	struct hash_elem *e = hash_find(&spt->pages, &page->hash_elem);
+	struct hash_elem *e = hash_find(&spt->pages, &empty_page.hash_elem);
 	lock_release(&spt->hash_lock);
 	if (e == NULL){
 		return e;	
@@ -190,11 +191,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if (user && is_kernel_vaddr(addr)) {
 		return false;
 	}
-	struct page * fault_page = spt_find_page(spt, addr);
-	if (fault_page == NULL) {
+	page = spt_find_page(spt, addr);
+	if (page == NULL) {
 		return false;
 	}
-	if (write && !fault_page->writable) {
+	if (write && !page->writable) {
 		return false;
 	}
 	return vm_do_claim_page (page);
@@ -214,8 +215,8 @@ vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
 	struct thread *current = thread_current();
-	struct page *p = spt_find_page(&current->spt, va);
-	if(p == NULL){
+	page = spt_find_page(&current->spt, va);
+	if(page == NULL){
 		return false;
 	}
 	return vm_do_claim_page (page);
@@ -235,6 +236,7 @@ vm_do_claim_page (struct page *page) {
 	if(!pml4_set_page(current->pml4, page->va, frame->kva, page->writable)) {
 		return false;
 	}
+	
 	return swap_in (page, frame->kva);
 }
 
