@@ -230,6 +230,7 @@ int exec(char *cmdline)
 
 // 보류
 tid_t fork(const char *thread_name, struct intr_frame *f) {
+	check_address(thread_name);
 	return process_fork(thread_name, f);
 } 
 
@@ -295,7 +296,9 @@ int filesize(int fd) {
 // fd 값 리턴, 실패시 -1 리턴. 파일 여는 함수
 int open(const char *file) {
 	check_address(file);
+	lock_acquire(&filesys_lock);
 	struct file *open_file = filesys_open(file);
+	lock_release(&filesys_lock);
 	if (open_file == NULL) {
 		return -1;
 	}

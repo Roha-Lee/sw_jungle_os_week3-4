@@ -258,7 +258,7 @@ process_exec (void *f_name) {
 	}
 	// 유저스택에 인자 넣기
 	void **rspp = &_if.rsp;
-	hex_dump(_if.rsp, _if.rsp, 53, true);
+	// hex_dump(_if.rsp, _if.rsp, 53, true);
 	argument_stack(argv, argc, rspp);
 	_if.R.rdi = argc;
 	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
@@ -766,6 +766,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -783,6 +784,7 @@ setup_stack (struct intr_frame *if_) {
 	success = vm_alloc_page(VM_ANON | VM_STACK, stack_bottom, true);
 	if (success) {
 		if (vm_claim_page(stack_bottom)) {
+			// hex_dump(USER_STACK, USER_STACK, PGSIZE, true);
 			if_->rsp = USER_STACK;
 		}
 		else {

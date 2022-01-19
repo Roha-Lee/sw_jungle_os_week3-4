@@ -37,6 +37,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	// hex_dump(page->va, page->va, 1<<12, true);
 }
 
 /* Swap out the page by writing contents to the swap disk. */
