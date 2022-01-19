@@ -75,15 +75,23 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: should modify the field after calling the uninit_new. */
 		struct page * newpage = malloc(sizeof (struct page));
 		switch(VM_TYPE(type)){
+			case VM_UNINIT:
+				uninit_new(newpage, upage, init, type, aux, NULL);
+				break;
 			case VM_ANON:
 				uninit_new(newpage, upage, init, type, aux, anon_initializer);
+				break;
+			default:
 				break;
 		}
 		newpage->writable = writable;
 		
 		/* TODO: Insert the page into the spt. */
-		spt_insert_page(spt, newpage);
-		return true;
+		bool success = spt_insert_page(spt, newpage);
+		if (!success) {
+			free(newpage);
+		}
+		return success;
 	}
 	return false;
 }
@@ -252,6 +260,23 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
+	struct hash_iterator i;
+	struct hash * src_hash = &src->pages;
+	hash_first (&i, src_hash);
+	while (hash_next (&i)) {
+    	struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+		enum vm_type type = page_get_type(p);
+		void *upage = p->va;
+		bool writable = p->writable;
+		bool success = false;
+		vm_initializer *init = p->uninit.init;
+		void *aux = p->uninit.aux;
+		if(type == VM_UNINIT){
+			success = vm_alloc_page()
+		}
+		
+	}
+	printf("\n");
 }
 
 /* Free the resource hold by the supplemental page table */
