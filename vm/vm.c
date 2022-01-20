@@ -24,6 +24,14 @@ page_less (const struct hash_elem *a_,
   return a->va < b->va;
 }
 
+//typedef void hash_action_func (struct hash_elem *e, void *aux);
+void
+destroy_pages(struct hash_elem *e, void *aux){
+	// destructor (hash_elem, h->aux); 와 같이 불림 
+	struct page * p = hash_entry(e, struct page, hash_elem);
+	destroy(p);
+}
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -67,6 +75,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
+	
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
@@ -75,15 +84,13 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: should modify the field after calling the uninit_new. */
 		struct page * newpage = malloc(sizeof (struct page));
 		switch(VM_TYPE(type)){
-			case VM_UNINIT:
-				uninit_new(newpage, upage, init, type, aux, NULL);
-				break;
 			case VM_ANON:
 				uninit_new(newpage, upage, init, type, aux, anon_initializer);
 				break;
 			default:
 				break;
 		}
+		newpage->uninit.aux = aux;
 		newpage->writable = writable;
 		
 		/* TODO: Insert the page into the spt. */
@@ -271,12 +278,20 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		bool success = false;
 		vm_initializer *init = p->uninit.init;
 		void *aux = p->uninit.aux;
-		if(type == VM_UNINIT){
-			success = vm_alloc_page()
+		if(type == VM_UNINIT) {
+			if (!vm_alloc_page_with_initializer(type, upage, writable, init, aux))
+				return false;
 		}
-		
+		else if(type == VM_ANON) {
+			if (!vm_alloc_page_with_initializer(type, upage, writable, init, aux))
+				return false;
+			if (!vm_claim_page(upage))
+				return false;
+			struct page* newpage = spt_find_page(dst, upage);
+			memcpy(newpage->frame->kva, p->frame->kva, PGSIZE);
+		}
 	}
-	printf("\n");
+	return true;
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -284,4 +299,6 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_destroy(&spt->pages, destroy_pages);
 }
+
