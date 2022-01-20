@@ -713,12 +713,10 @@ lazy_load_segment (struct page *page, void *aux) {
 	size_t read_bytes = file_read (file, kva, page_read_bytes);
 	lock_release(&filesys_lock);
 	if (read_bytes != (int) page_read_bytes) {
-		free(aux);
 		return false;	
 	}
 	
 	memset (kva + page_read_bytes, 0, page_zero_bytes);	
-	free(aux);
 	f_info = NULL;
 	return true;
 }
