@@ -29,7 +29,7 @@ void
 destroy_pages(struct hash_elem *e, void *aux){
 	// destructor (hash_elem, h->aux); 와 같이 불림 
 	struct page * p = hash_entry(e, struct page, hash_elem);
-	destroy(p);
+	vm_dealloc_page(p);
 }
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -299,6 +299,8 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	lock_acquire(&spt->hash_lock);
 	hash_destroy(&spt->pages, destroy_pages);
+	lock_release(&spt->hash_lock);
 }
 
