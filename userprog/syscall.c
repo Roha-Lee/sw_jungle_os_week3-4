@@ -15,12 +15,15 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
-
+//project 3
+#include "vm/vm.h"
 const int STDIN = 1;
 const int STDOUT = 2;
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-void check_address(void *addr);
+// void check_address(void *addr);
+struct page * check_address(void *addr); // project 3
+void check_valid_buffer(void* buffer, unsigned size, void* rsp, bool to_write); // project 3
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 static struct file *find_file_by_fd(int fd);
@@ -133,12 +136,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			
 		case SYS_READ:
 		{
+			check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
 			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		}
 			
 		case SYS_WRITE:
 		{
+			check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		}
@@ -345,14 +350,34 @@ void close(int fd) {
 
 
 /*------------- project 2 helper function -------------- */
-void check_address(void *addr)
-{
-	struct thread *cur = thread_current();
-	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
-	{
+// void check_address(void *addr)
+// {
+// 	struct thread *cur = thread_current();
+// 	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
+// 	{
+// 		exit(-1);
+// 	}
+// }
+
+// project 3
+// 기존에는 rsp값으로 check_address를 진행했는데 수정해야함
+struct page * check_address(void *addr){
+	if(is_kernel_vaddr(addr)){
 		exit(-1);
 	}
+	return spt_find_page(&thread_current()->spt,addr);
 }
+
+void check_valid_buffer(void* buffer, unsigned size, void* rsp, bool to_write){
+	for(int i=0; i<size; i++){
+		struct page* page = check_address(buffer + i);
+		if(page == NULL)
+			exit(-1);
+		if(to_write == true && page->writable == false)
+			exit(-1);
+	}
+}
+
 // fd 로 파일 찾는 함수
 static struct file *find_file_by_fd(int fd) {
 	struct thread *cur = thread_current();
