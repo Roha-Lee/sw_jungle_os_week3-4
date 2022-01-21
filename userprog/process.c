@@ -235,6 +235,9 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
+#ifdef VM
+	supplemental_page_table_init(&thread_current()->spt);
+#endif
 	// for argument parsing
 	char *argv[64]; 	// 인자 배열
 	int argc = 0;		// 인자 개수
@@ -320,7 +323,7 @@ process_exit (void) {
 	file_close(cur->running);
 
 	process_cleanup ();
-
+	
 	// wake up blocked parent
 	sema_up(&cur->wait_sema);   // 나 끝났어~
 	// parent가 child 의 exit status 'wait' 를 받을때까지 child의 termination을 미룸.

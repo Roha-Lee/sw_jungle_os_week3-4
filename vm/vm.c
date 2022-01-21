@@ -260,7 +260,9 @@ vm_do_claim_page (struct page *page) {
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	lock_init(&spt->hash_lock);
+	lock_acquire(&spt->hash_lock);
 	hash_init(&spt->pages, page_hash, page_less, NULL);
+	lock_release(&spt->hash_lock);
 }
 
 /* Copy supplemental page table from src to dst */
