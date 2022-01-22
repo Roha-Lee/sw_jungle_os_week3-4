@@ -15,6 +15,7 @@ void process_activate (struct thread *next);
 // project 3
 bool install_page (void *upage, void *kpage, bool writable);
 bool lazy_load_segment (struct page *page, void *aux);
+struct file *process_get_file(int fd);
 // bool setup_stack(struct intr_frame *if_);
 // project 3
 struct container{

@@ -588,6 +588,16 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* It's okay. */
 	return true;
 }
+//project 3
+struct file *process_get_file(int fd){
+	struct thread *curr = thread_current();
+	struct file* fd_file = curr->fd_table[fd];
+
+	if(fd_file)
+		return fd_file;
+	else
+		return NULL;
+}
 
 #ifndef VM
 /* Codes of this block will be ONLY USED DURING project 2.

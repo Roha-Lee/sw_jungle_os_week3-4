@@ -194,6 +194,10 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0, addr, 1)){
+		vm_claim_page(addr);
+		thread_current()->stack_bottom -= PGSIZE;
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -321,17 +325,17 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
 	// project 3
-	// struct hash_iterator i;
+	struct hash_iterator i;
 
-	// hash_first(&i, &spt->pages);
-	// while(hash_next(&i)){
-	// 	struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
+	hash_first(&i, &spt->pages);
+	while(hash_next(&i)){
+		struct page *page = hash_entry(hash_cur(&i), struct page, hash_elem);
 
-	// 	if(page->operations->type == VM_FILE){
-	// 		do_munmap(page->va);
-	// 	}
-	// }
-	// hash_destroy(&spt->pages, spt_destructor);
+		if(page->operations->type == VM_FILE){
+			do_munmap(page->va);
+		}
+	}
+	hash_destroy(&spt->pages, spt_destructor);
 }
 // project 3
 // page p에 대한 hash value를 return해줌 (hash 값을 구해주는 함수의 pointer)
