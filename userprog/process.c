@@ -706,15 +706,15 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t ofs = f_info->ofs;
 	size_t page_read_bytes = f_info->page_read_bytes;
 	size_t page_zero_bytes = f_info->page_zero_bytes;
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	file_seek (file, ofs);
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	
 	/* Load this page. */
 	void * kva = page->frame->kva;
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	size_t read_bytes = file_read (file, kva, page_read_bytes);
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	if (read_bytes != (int) page_read_bytes) {
 		return false;	
 	}

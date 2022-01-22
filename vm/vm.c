@@ -280,7 +280,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		bool success = false;
 		vm_initializer *init = p->uninit.init;
 		void *aux = p->uninit.aux;
-		if(type == VM_UNINIT) {
+		if(p->operations->type == VM_UNINIT){
 			if (!vm_alloc_page_with_initializer(type, upage, writable, init, aux))
 				return false;
 		}

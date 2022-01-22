@@ -15,6 +15,7 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "vm/vm.h"
 
 const int STDIN = 1;
 const int STDOUT = 2;
@@ -237,6 +238,7 @@ tid_t fork(const char *thread_name, struct intr_frame *f) {
 // 인자로 넣어주는 fd가 내가 쓰고싶은 파일. buffer에 쓸 내용 넣어서 전달.
 int write(int fd, const void *buffer, unsigned size) {
 	check_address(buffer);
+	check_valid_buffer(buffer, size, true);
 	int write_result;
 	struct file *fileobj = find_file_by_fd(fd);
 	if (fileobj == NULL) {
@@ -258,6 +260,7 @@ int write(int fd, const void *buffer, unsigned size) {
 
 int read(int fd, void *buffer, unsigned size) {
 	check_address(buffer);
+	check_valid_buffer(buffer, size, false);
 	int read_result;
 	struct thread *cur = thread_current();
 	struct file *file_fd = find_file_by_fd(fd);
@@ -349,11 +352,20 @@ void close(int fd) {
 void check_address(void *addr)
 {
 	struct thread *cur = thread_current();
-	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
-	{
+	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL || spt_find_page(&cur->spt, addr) == NULL) {
 		exit(-1);
 	}
 }
+
+void check_valid_buffer(void *addr, unsigned size, bool writable) {
+	for (int i = 0; i < size; i += 4096){
+		struct page *page = spt_find_page (&thread_current() -> spt, addr);
+		if (page == NULL || writable && !page->writable){
+			exit(-1);
+		} 
+	} 
+}
+
 // fd 로 파일 찾는 함수
 static struct file *find_file_by_fd(int fd) {
 	struct thread *cur = thread_current();
