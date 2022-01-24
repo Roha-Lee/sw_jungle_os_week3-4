@@ -58,7 +58,7 @@ void munmap(void *addr);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
-struct lock filesys_lock;
+// struct lock filesys_lock;
 
 void
 syscall_init (void) {

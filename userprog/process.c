@@ -19,6 +19,7 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h" // project 3
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -446,14 +447,17 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
-	/* Allocate and activate page directory. */
+	/* Allocate and activate page direc
+	tory. */
 	t->pml4 = pml4_create ();					// 페이지 디렉토리 생성
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());		// 페이지 테이블 활성화
 
 	/* Open executable file. */
+	lock_acquire(&filesys_lock);
 	file = filesys_open (file_name);			// 프로그램 파일 open
+	lock_release(&filesys_lock);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -465,7 +469,11 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 
 	/* Read and verify executable header. */
 	// ELF파일 헤더 정보를 읽어와 저장
-	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
+	lock_acquire(&filesys_lock);
+	off_t _read_byte = file_read (file, &ehdr, sizeof ehdr);
+	lock_release(&filesys_lock);
+	// if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
+	if (_read_byte != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
 			|| ehdr.e_machine != 0x3E // amd64
@@ -484,8 +492,10 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 		if (file_ofs < 0 || file_ofs > file_length (file))
 			goto done;
 		file_seek (file, file_ofs);
-
-		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
+		lock_acquire(&filesys_lock);
+		_read_byte = file_read (file, &phdr, sizeof phdr); 
+		lock_release(&filesys_lock);
+		if (_read_byte != sizeof phdr)
 			goto done;
 		file_ofs += sizeof phdr;
 		switch (phdr.p_type) {
@@ -645,7 +655,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			return false;
 
 		/* Load this page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		lock_acquire(&filesys_lock);
+		off_t _read_byte = file_read (file, kpage, page_read_bytes);
+		lock_release(&filesys_lock);
+		if (_read_byte != (int) page_read_bytes) {
 			palloc_free_page (kpage);
 			return false;
 		}
