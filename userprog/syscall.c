@@ -205,6 +205,10 @@ void halt(void)
 
 bool create(const char *filename, unsigned initial_size) 
 {
+	// project 3
+	if (!filename){
+		exit(-1);
+	}
 	bool return_code;
 	check_address(filename);
 
@@ -315,6 +319,12 @@ int filesize(int fd) {
 // fd 값 리턴, 실패시 -1 리턴. 파일 여는 함수
 int open(const char *file) {
 	check_address(file);
+
+	// project 3
+	if(file == NULL){
+		return -1;
+	}
+
 	struct file *open_file = filesys_open(file);
 	if (open_file == NULL) {
 		return -1;

@@ -132,7 +132,7 @@ vm_get_victim (void) {
 	// project 3
 	struct thread *curr = thread_current();
 	struct list_elem *e = start;
-
+	// 이전에 찾았던 곳부터 돌림
 	for(start = e; start != list_end(&frame_table); start = list_next(start)){
 		victim = list_entry(start, struct frame, frame_elem);
 		if (pml4_is_accessed(curr->pml4, victim->page->va))
@@ -140,7 +140,7 @@ vm_get_victim (void) {
 		else
 			return victim;
 	}
-	// 못찾았을 경우 한번 더 돌림
+	// 못찾았을 경우 맨 처음부터 한번 더 돌림
 	for(start = list_begin(&frame_table); start != e; start = list_next(start)){
 		victim = list_entry(start, struct frame, frame_elem);
 		if(pml4_is_accessed(curr->pml4, victim->page->va))
@@ -160,7 +160,7 @@ vm_evict_frame (void) {
 	struct frame *victim = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
 	swap_out(victim->page);
-	return NULL;
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -177,7 +177,7 @@ vm_get_frame (void) {
 		
 	if(frame->kva == NULL) // frame 에서 가용한 page가 없다면
 	{
-		frame = vm_evict_frame(); // 쫓아냄(아직 작성 x)
+		frame = vm_evict_frame(); // 쫓아낼 frame을 받음
 		frame->page = NULL;
 		return frame;
 	}
@@ -217,7 +217,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if(is_kernel_vaddr(addr)){
 		return false;
 	}
-
+	// 둘다 user rsp를 사용할것이라는 의미 - gitbook에 있음
 	void *rsp_stack = is_kernel_vaddr(f->rsp) ? thread_current()->rsp_stack : f->rsp;
 	if(not_present){
 		if(!vm_claim_page(addr)){

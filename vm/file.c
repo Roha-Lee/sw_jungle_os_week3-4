@@ -83,6 +83,7 @@ file_backed_destroy (struct page *page) {
 }
 
 /* Do the mmap */
+// load segment 같은 동작
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
