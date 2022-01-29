@@ -1,5 +1,6 @@
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
+#define UNUSED __attribute__ ((unused))
 
 #include <list.h>
 #include <stdbool.h>

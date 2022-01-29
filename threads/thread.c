@@ -24,6 +24,9 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
+/* return the minimun value between two arguments */
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -44,9 +47,9 @@ static struct lock tid_lock;
 static struct list destruction_req;
 
 /* Statistics. */
-static long long idle_ticks;    /* # of timer ticks spent idle. */
-static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
-static long long user_ticks;    /* # of timer ticks in user programs. */
+static long long idle_ticks;    		/* # of timer ticks spent idle. */
+static long long kernel_ticks;  		/* # of timer ticks in kernel threads. */
+static long long user_ticks;    		/* # of timer ticks in user programs. */
 
 
 /* Scheduling. */
@@ -67,6 +70,7 @@ static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
 
+
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
 
@@ -76,6 +80,7 @@ static tid_t allocate_tid (void);
  * always at the beginning of a page and the stack pointer is
  * somewhere in the middle, this locates the curent thread. */
 #define running_thread() ((struct thread *) (pg_round_down (rrsp ())))
+
 
 
 // Global descriptor table for the thread_start.
@@ -109,16 +114,20 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init (&tid_lock);
+
+	list_init(&all_list);
 	list_init (&ready_list);
+	list_init (&blocked_list);
 	list_init (&destruction_req);
+	next_tick_to_awake = INT64_MAX;
 
 	// 슬립 리스트 초기화. 
 	list_init (&sleep_list);
 
 	/* Set up a thread structure for the running thread. */
-	initial_thread = running_thread ();
+	initial_thread =  running_thread();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
@@ -223,20 +232,21 @@ thread_print_stats (void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
-tid_t
-thread_create (const char *name, int priority,
-		thread_func *function, void *aux) {
+tid_t thread_create(const char *name, int priority,
+					thread_func *function, void *aux)
+{
 	struct thread *t;
 	tid_t tid;
 
-	ASSERT (function != NULL);
+	ASSERT(function != NULL);
 
 	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO);
+	t = palloc_get_page(PAL_ZERO);
 	if (t == NULL)
 		return TID_ERROR;
 
 	/* Initialize thread. */
+
 	init_thread (t, name, priority);
 	// project 2-4 File descriptor
 	t->fd_table = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
@@ -258,9 +268,9 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
-	t->tf.R.rsi = (uint64_t) aux;
+	t->tf.rip = (uintptr_t)kernel_thread;
+	t->tf.R.rdi = (uint64_t)function;
+	t->tf.R.rsi = (uint64_t)aux;
 	t->tf.ds = SEL_KDSEG;
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
@@ -271,6 +281,14 @@ thread_create (const char *name, int priority,
 	thread_unblock (t);
 	thread_test_preemption ();
 
+
+	/*
+	if (thread_current()->priority < t->priority)
+	{
+		thread_yield();
+	}
+	*/
+	thread_test_preemption();
 	return tid;
 }
 
@@ -305,6 +323,7 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_insert_ordered (&ready_list, &t->elem, thread_compare_priority, 0);
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -316,11 +335,11 @@ thread_name (void) {
 }
 
 /* Returns the running thread.
-   This is running_thread() plus a couple of sanity checks.
+   This is () plus a couple of sanity checks.
    See the big comment at the top of thread.h for details. */
 struct thread *
 thread_current (void) {
-	struct thread *t = running_thread ();
+	struct thread *t =  running_thread();
 
 	/* Make sure T is really a thread.
 	   If either of these assertions fire, then your thread may
@@ -348,6 +367,7 @@ thread_exit (void) {
 #ifdef USERPROG
 	process_exit ();
 #endif
+	list_remove(&thread_current()->allelem);
 
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
@@ -368,6 +388,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread)
 		list_insert_ordered (&ready_list, &curr->elem, thread_compare_priority, 0);
+
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -481,12 +502,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init (&t->donations);
 
 	// project 2-3 System call
+
 	list_init(&t->child_list);
 	sema_init(&t->wait_sema, 0);
 	sema_init(&t->fork_sema, 0);
 	sema_init(&t->free_sema, 0);
 	// project 2-5 
 	t->running = NULL;
+
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -542,7 +565,7 @@ do_iret (struct intr_frame *tf) {
    added at the end of the function. */
 static void
 thread_launch (struct thread *th) {
-	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
+	uint64_t tf_cur = (uint64_t) & running_thread()->tf;
 	uint64_t tf = (uint64_t) &th->tf;
 	ASSERT (intr_get_level () == INTR_OFF);
 
@@ -618,14 +641,14 @@ do_schedule(int status) {
 
 static void
 schedule (void) {
-	struct thread *curr = running_thread ();
+	struct thread *curr = running_thread();
 	struct thread *next = next_thread_to_run ();
 
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (curr->status != THREAD_RUNNING);
 	ASSERT (is_thread (next));
 	/* Mark us as running. */
-	next->status = THREAD_RUNNING;
+	next->status = THREAD_RUNNING; 
 
 	/* Start new time slice. */
 	thread_ticks = 0;
@@ -677,6 +700,7 @@ void thread_test_preemption (void)
 		}
 		else{
 			thread_yield ();
+
 		}
 	}
 }
@@ -696,6 +720,7 @@ thread_compare_donate_priority (const struct list_elem *a, const struct list_ele
 }
 
 void 
+
 donate_priority (void)
 {
 	int depth;

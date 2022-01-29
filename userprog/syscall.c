@@ -12,6 +12,15 @@
 #include "userprog/gdt.h"
 #include "userprog/process.h"
 #include "threads/flags.h"
+#include "threads/vaddr.h"
+#include "userprog/gdt.h"
+#include "userprog/process.h"
+#include "userprog/syscall.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include <list.h>
+#include <stdio.h>
+#include <syscall-nr.h>
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
@@ -45,6 +54,21 @@ void close(int fd);
 void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
 void munmap(void *addr);
 
+void syscall_handler(struct intr_frame *);
+
+void check_address(uaddr);
+void halt(void);
+void exit(int status);
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+int open(const char *file);
+int filesize(int fd);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, const void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -70,12 +94,14 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	lock_init(&file_rw_lock);
 }
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
+
 	#ifdef VM
 		thread_current()->rsp_stack = f->rsp; //syscall 호출한 user process의 user stack pointer
 	#endif
@@ -214,6 +240,7 @@ bool create(const char *filename, unsigned initial_size)
 	return_code = filesys_create(filename, initial_size);
 	lock_release (&filesys_lock);
 	return return_code;
+
 }
 
 bool remove(const char *filename)
