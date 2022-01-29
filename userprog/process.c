@@ -233,11 +233,6 @@ process_exec (void *f_name) {
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
-	/* We first kill the current context */
-	process_cleanup ();
-#ifdef VM
-	supplemental_page_table_init(&thread_current()->spt);
-#endif
 	// for argument parsing
 	char *argv[64]; 	// 인자 배열
 	int argc = 0;		// 인자 개수
@@ -251,6 +246,13 @@ process_exec (void *f_name) {
 		argc++;
 	}
 
+	/* We first kill the current context */
+	process_cleanup ();
+
+#ifdef VM
+	supplemental_page_table_init(&thread_current()->spt);
+#endif
+
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -261,11 +263,13 @@ process_exec (void *f_name) {
 	}
 	// 유저스택에 인자 넣기
 	void **rspp = &_if.rsp;
-	// hex_dump(_if.rsp, _if.rsp, 53, true);
 	argument_stack(argv, argc, rspp);
+
 	_if.R.rdi = argc;
 	_if.R.rsi = (uint64_t)*rspp + sizeof(void *);
-	
+	// project 3 ...?
+	palloc_free_page(file_name);
+
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -336,7 +340,10 @@ process_cleanup (void) {
 	struct thread *curr = thread_current ();
 
 #ifdef VM
-	supplemental_page_table_kill (&curr->spt);
+	if(!hash_empty(&curr->spt.pages)){
+		supplemental_page_table_kill(&curr->spt);
+	}
+	// supplemental_page_table_kill (&curr->spt);
 #endif
 
 	uint64_t *pml4;
@@ -421,7 +428,8 @@ struct ELF64_PHDR {
 #define ELF ELF64_hdr
 #define Phdr ELF64_PHDR
 
-static bool setup_stack (struct intr_frame *if_);
+// static bool setup_stack (struct intr_frame *if_);
+bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
@@ -591,6 +599,16 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* It's okay. */
 	return true;
 }
+//project 3
+struct file *process_get_file(int fd){
+	struct thread *curr = thread_current();
+	struct file* fd_file = curr->fd_table[fd];
+
+	if(fd_file)
+		return fd_file;
+	else
+		return NULL;
+}
 
 #ifndef VM
 /* Codes of this block will be ONLY USED DURING project 2.
@@ -657,7 +675,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
-static bool
+bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
@@ -696,31 +714,36 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-static bool
+// project 3
+bool
+install_page (void *upage, void *kpage, bool writable) {
+	struct thread *t = thread_current ();
+
+	/* Verify that there's not already a page at that virtual
+	 * address, then map our page there. */
+	return (pml4_get_page (t->pml4, upage) == NULL
+			&& pml4_set_page (t->pml4, upage, kpage, writable));
+}
+// project 3 - static bool -> bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	struct file_page *f_info = (struct file_page *)aux;
-	struct file *file = f_info->file;
-	off_t ofs = f_info->ofs;
-	size_t page_read_bytes = f_info->page_read_bytes;
-	size_t page_zero_bytes = f_info->page_zero_bytes;
-	// lock_acquire(&filesys_lock);
-	file_seek (file, ofs);
-	// lock_release(&filesys_lock);
-	
-	/* Load this page. */
-	void * kva = page->frame->kva;
-	// lock_acquire(&filesys_lock);
-	size_t read_bytes = file_read (file, kva, page_read_bytes);
-	// lock_release(&filesys_lock);
-	if (read_bytes != (int) page_read_bytes) {
-		return false;	
+	// project 3
+	struct file *file = ((struct container *)aux)->file;
+	off_t offsetof = ((struct container *)aux)->offset;
+	size_t page_read_bytes = ((struct container *)aux)->page_read_bytes;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+	file_seek(file, offsetof);
+
+	if(file_read(file, page->frame->kva, page_read_bytes) != (int)page_read_bytes){
+		palloc_free_page(page->frame->kva);
+		return false;
 	}
-	
-	memset (kva + page_read_bytes, 0, page_zero_bytes);	
-	f_info = NULL;
+	memset(page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+
 	return true;
 }
 
@@ -753,14 +776,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		struct file_page * f_info = malloc(sizeof (struct file_page));
-		f_info->file = file;
-		f_info->ofs = ofs;
-		f_info->page_read_bytes = page_read_bytes;
-		f_info->page_zero_bytes = page_zero_bytes;
-		void *aux = f_info;
+		// project 3
+		// void *aux = NULL;
+		struct container *container = (struct container *)malloc(sizeof(struct container));
+		container->file = file;
+		container->page_read_bytes = page_read_bytes;
+		container->offset = ofs;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, container))
 			return false;
 
 		/* Advance. */
@@ -773,7 +797,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
-static bool
+bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
@@ -782,23 +806,17 @@ setup_stack (struct intr_frame *if_) {
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
-	success = vm_alloc_page(VM_ANON | VM_STACK, stack_bottom, true);
-	if (success) {
-		if (vm_claim_page(stack_bottom)) {
-			// hex_dump(USER_STACK, USER_STACK, PGSIZE, true);
+	// project 3
+	// anon page로 만들 uninit page를 stack_bottom에서 위로 1page만큼 만든다.
+	// 이 때 type에 VM_MARKER_0 flag를 추가함으로써 이 page가 stack임을 표시
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1)){
+		success = vm_claim_page(stack_bottom);
+		if(success){
 			if_->rsp = USER_STACK;
-		}
-		else {
-			// 페이지 할당 성공 but 내어줄 frame이 없는 경우 
-			printf("lack of physical memory.");
-			success = false;
+			thread_current()->stack_bottom = stack_bottom;
 		}
 	}
-	else {
-		// 이미 stack_bottom에 해당하는 페이지가 있는 경우 
-		printf("stack already ready.");
-		success = false;
-	}
+
 	return success;
 }
 #endif /* VM */

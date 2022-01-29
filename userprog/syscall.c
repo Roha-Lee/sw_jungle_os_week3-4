@@ -15,13 +15,15 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+//project 3
 #include "vm/vm.h"
-
 const int STDIN = 1;
 const int STDOUT = 2;
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
-void check_address(void *addr);
+// void check_address(void *addr);
+struct page * check_address(void *addr); // project 3
+void check_valid_buffer(void* buffer, unsigned size, void* rsp, bool to_write); // project 3
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 static struct file *find_file_by_fd(int fd);
@@ -39,6 +41,10 @@ int write(int fd, const void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
+// project 3
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -70,6 +76,9 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+	#ifdef VM
+		thread_current()->rsp_stack = f->rsp; //syscall 호출한 user process의 user stack pointer
+	#endif
 	switch (f->R.rax)
 	{
 		case SYS_HALT:
@@ -132,12 +141,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			
 		case SYS_READ:
 		{
+			check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
 			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		}
 			
 		case SYS_WRITE:
 		{
+			check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		}
@@ -159,7 +170,13 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			close(f->R.rdi);
 			break;
 		}
-			
+		// project 3
+		case SYS_MMAP:
+			f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
+		case SYS_MUNMAP:
+			munmap(f->R.rdi);
+			break;
 		default:
 			exit(-1);
 			break;
@@ -186,6 +203,10 @@ void halt(void)
 
 bool create(const char *filename, unsigned initial_size) 
 {
+	// project 3
+	if (!filename){
+		exit(-1);
+	}
 	bool return_code;
 	check_address(filename);
 
@@ -299,7 +320,12 @@ int filesize(int fd) {
 // fd 값 리턴, 실패시 -1 리턴. 파일 여는 함수
 int open(const char *file) {
 	check_address(file);
-	lock_acquire(&filesys_lock);
+
+	// project 3
+	if(file == NULL){
+		return -1;
+	}
+
 	struct file *open_file = filesys_open(file);
 	lock_release(&filesys_lock);
 	if (open_file == NULL) {
@@ -346,24 +372,61 @@ void close(int fd) {
 
 /*-------------project 2 syscall --------------------*/
 
+/*-------------project 3 syscall --------------------*/
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	if (offset % PGSIZE != 0){
+		return NULL;
+	}
+	if(pg_round_down(addr) != addr || is_kernel_vaddr(addr) || addr == NULL || (long long)length <=0)
+		return NULL;
+	// console input, output은 mapping x
+	if(fd == 0 || fd == 1)
+		exit(-1);
+	if(spt_find_page(&thread_current()->spt, addr))
+		return NULL;
+	
+	struct file *target = process_get_file(fd);
+	if(target == NULL)
+		return NULL;
+	
+	void *ret = do_mmap(addr, length, writable, target, offset);
+
+	return ret;
+}
+
+void munmap(void *addr){
+	do_munmap(addr);
+}
+/*-------------project 3 syscall --------------------*/
 
 
 /*------------- project 2 helper function -------------- */
-void check_address(void *addr)
-{
-	struct thread *cur = thread_current();
-	if (addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL || spt_find_page(&cur->spt, addr) == NULL) {
+// void check_address(void *addr)
+// {
+// 	struct thread *cur = thread_current();
+// 	if (addr == NULL || !is_user_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL)
+// 	{
+// 		exit(-1);
+// 	}
+// }
+
+// project 3
+// 기존에는 rsp값으로 check_address를 진행했는데 수정해야함
+struct page * check_address(void *addr){
+	if(is_kernel_vaddr(addr)){
 		exit(-1);
 	}
+	return spt_find_page(&thread_current()->spt,addr);
 }
 
-void check_valid_buffer(void *addr, unsigned size, bool writable) {
-	for (int i = 0; i < size; i += 4096){
-		struct page *page = spt_find_page (&thread_current() -> spt, addr);
-		if (page == NULL || writable && !page->writable){
+void check_valid_buffer(void* buffer, unsigned size, void* rsp, bool to_write){
+	for(int i=0; i<size; i++){
+		struct page* page = check_address(buffer + i);
+		if(page == NULL)
 			exit(-1);
-		} 
-	} 
+		if(to_write == true && page->writable == false)
+			exit(-1);
+	}
 }
 
 // fd 로 파일 찾는 함수

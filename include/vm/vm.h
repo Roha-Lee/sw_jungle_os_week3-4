@@ -2,10 +2,10 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
-#include "threads/synch.h"
-#include <hash.h>
+// project 3
 #include "lib/kernel/hash.h"
-
+#include "threads/vaddr.h"
+#include "threads/mmu.h"
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -49,9 +49,10 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
-	struct hash_elem hash_elem;
-	bool writable;
-	
+	// project 3
+	struct hash_elem hash_elem; // hash table element - 얘로 page를 찾아서 va로 접근한다.
+	bool writable; // True일 경우 해당 주소에 write 가능.
+	bool is_loaded; // physical memory에 탑재 여부를 알려주는 flag
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -66,8 +67,10 @@ struct page {
 
 /* The representation of "frame" */
 struct frame {
-	void *kva;
+	void *kva; // kernel virtual address
 	struct page *page;
+	// project 3
+	struct list_elem frame_elem; // frame list로 관리하기 위함
 };
 
 /* The function table for page operations.
@@ -89,9 +92,8 @@ struct page_operations {
 /* Representation of current process's memory space.
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
-struct supplemental_page_table {
-	struct hash pages;
-	struct lock hash_lock;
+struct supplemental_page_table { 
+	struct hash pages ; // project 3
 };
 
 #include "threads/thread.h"
@@ -116,4 +118,10 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
+//project 3
+unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED);
+bool page_less(const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
+bool insert_page(struct hash *pages, struct page *p);
+bool delete_page(struct hash *pages, struct page *p);
+void spt_destructor(struct hash_elem *e, void* aux);
 #endif  /* VM_VM_H */
