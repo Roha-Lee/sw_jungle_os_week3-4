@@ -23,7 +23,7 @@ void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 // void check_address(void *addr);
 struct page * check_address(void *addr); // project 3
-void check_valid_buffer(void* buffer, unsigned size, void* rsp, bool to_write); // project 3
+// void check_valid_buffer(void* buffer, unsigned size, void* rsp, bool to_write); // project 3
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 static struct file *find_file_by_fd(int fd);
@@ -141,14 +141,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			
 		case SYS_READ:
 		{
-			check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
+			// check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 1);
 			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		}
 			
 		case SYS_WRITE:
 		{
-			check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
+			// check_valid_buffer(f->R.rsi, f->R.rdx, f->rsp, 0);
 			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 		}
