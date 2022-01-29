@@ -66,7 +66,10 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_insert_ordered (&sema->waiters, &thread_current ()->elem, thread_compare_priority, 0);
+
+		list_insert_ordered (&sema->waiters, &thread_current ()->elem, 
+		thread_compare_priority, 0);
+
 		thread_block ();
 	}
 	sema->value--;
@@ -111,7 +114,9 @@ sema_up (struct semaphore *sema) {
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters))
 	{
-		list_sort(&sema->waiters, thread_compare_priority, 0);
+
+		list_sort (&sema->waiters, thread_compare_priority, 0);
+
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	}
@@ -191,17 +196,17 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-	/* priority donation */
+
 	struct thread *cur = thread_current ();
 	if (lock->holder) {
 		cur->wait_on_lock = lock;
-		list_insert_ordered (&lock->holder->donations, &cur->donation_elem, thread_compare_donate_priority, 0);
+		list_insert_ordered (&lock->holder->donations, &cur->donation_elem, 
+		thread_compare_donate_priority, 0);
 		donate_priority ();
 	}
-
 	sema_down (&lock->semaphore);
-	/* priority donation */
-	cur->wait_on_lock = NULL;
+	cur->wait_on_lock = NULL; // sema down 에서 lock을 얻었으므로 필요한 lock이 NULL.
+
 	lock->holder = cur;
 }
 
@@ -321,7 +326,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 
 	if (!list_empty (&cond->waiters))
 	{
-		list_sort (&cond->waiters, sema_compare_priority, 0);
+
+		list_sort (&cond->waiters, semaphore_compare_priority, 0);
+
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 	}
@@ -342,17 +349,17 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 		cond_signal (cond, lock);
 }
 
-/* return True if l greater than s or return False if l less than s or l equals s
-	l and s is the sepmahore list. so we should add extra code to get the thread's priority*/
-bool 
-sema_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED)
-{
-	struct semaphore_elem *l_sema = list_entry (l, struct semaphore_elem, elem);
-	struct semaphore_elem *s_sema = list_entry (s, struct semaphore_elem, elem);
 
+// priority scheduling, sync
+
+bool 
+semaphore_compare_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED)
+{
+	struct semaphore_elem *l_sema = list_entry(l, struct semaphore_elem, elem);
+	struct semaphore_elem *s_sema = list_entry(s, struct semaphore_elem, elem);
 	struct list *waiter_l_sema = &(l_sema->semaphore.waiters);
 	struct list *waiter_s_sema = &(s_sema->semaphore.waiters);
+	return list_entry (list_begin (waiter_l_sema), struct thread, elem)->priority 
+			> list_entry (list_begin (waiter_s_sema), struct thread, elem)->priority;
 
-	return list_entry (list_begin (waiter_l_sema), struct thread, elem)->priority
-		 > list_entry (list_begin (waiter_s_sema), struct thread, elem)->priority;
 }

@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
-
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -96,34 +95,41 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-	struct list_elem allelem;
 
-	/* priority donation */
-	int init_priority;					/* the original priority*/
-	struct lock *wait_on_lock;			/* the locks which is thread wait*/
-	struct list donations;				/* the thread who donated priority to thread */
-	struct list_elem donation_elem;		/* the thread who donated priority to thread */
+	// 알람시계 일어날 시간. 
+	int64_t wakeup;
 
-	/* Project 2 */
-	int exit_status;				/* used to deliver child exit_status to parent */
-	struct file **fdTable; 			/* allocation in threac_create (thread.c) */
-	struct file *running; 			/* executable ran by current process (process.c load, process_exit) */
-	struct semaphore wait_sema; 	/* used by parent to wait for child */
-	struct semaphore free_sema;	 	/* Postpone child termination (process_exit) until parent receives its exit_status in 'wait' (process_wait) */
-	struct semaphore fork_sema;	 // parent wait (process_wait) until child fork completes (__do_fork)
-	struct list child_list;		 // keep children
-	struct list_elem child_elem; // used to put current thread into 'children' list
-	int fdIdx;			   // an index of an open spot in fdTable
-	struct intr_frame parent_if; // to preserve my current intr_frame and pass it down to child in fork ('parent_if' in child's perspective)
-	
-	#ifdef USERPROG
-		/* Owned by userprog/process.c. */
-		uint64_t *pml4;                     /* Page map level 4 */
-	#endif
-	#ifdef VM
-		/* Table for whole virtual memory owned by thread. */
-		struct supplemental_page_table spt;
-	#endif
+	// priority donation
+	int init_priority;  // 최초 스레드 우선순위 저장.
+
+	struct lock *wait_on_lock;  // 현재 스레드가 요청했는데 받지못한 lock. 기다리는중
+	struct list donations; // 자신에게 priority 를 나누어준 '쓰레드'의 리스트
+	struct list_elem donation_elem; // 위의 스레드 리스트를 관리하기위한 element. thread 구조체의 elem과 구분.
+
+	// Project 2
+	int exit_status;    // child 프로세스의 exit status를 parent에게 전달하기 위함.
+	struct file **fd_table;  
+	struct file *running;
+	struct semaphore wait_sema;  // parent 프로세스가 child 프로세스를 기다리기 위함.
+	struct semaphore free_sema;  // parent 프로세스의 종료를 child 프로세스의 종료 시그널을 받을때까지로 미룸
+	struct semaphore fork_sema;  // child 의 fork 가 완료될때까지 parent는 기다린다. (__do_fork)
+	struct list child_list;  // children 리스트
+	struct list_elem child_elem;  // 현재 스레드를 children list에 집어넣기 위함.
+	int fd_idx;   // fdTable의 인덱스
+	struct intr_frame parent_if;  // 자신의 intr_frame을 보존하고 fork시에 child 프로세스에 전달.
+	int stdin_count;
+	int stdout_count;
+
+#ifdef USERPROG
+	/* Owned by userprog/process.c. */
+	uint64_t *pml4;                     /* Page map level 4 */
+#endif
+#ifdef VM
+	/* Table for whole virtual memory owned by thread. */
+	struct supplemental_page_table spt;
+	void *stack_bottom;
+	void *rsp_stack;
+#endif
 
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
@@ -158,6 +164,16 @@ void thread_yield (void);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+// priority donation
+bool
+thread_compare_donate_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void 
+donate_priority (void);
+void
+remove_with_lock (struct lock *lock);
+void
+refresh_priority (void);
+
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
@@ -165,22 +181,18 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-void thread_sleep(int64_t ticks);
-void thread_awake(int64_t ticks);
-void update_next_tick_to_awake(int64_t ticks);
-int64_t get_next_tick_to_awake(void);
-bool thread_compare_priority (struct list_elem *l, struct list_elem *s, void *aux UNUSED);
-void  thread_test_preemption (void);
+// 알람시계 함수 선언
+void thread_sleep (int64_t ticks);
+void thread_awake (int64_t ticks);
+
+// priority scheduling 함수
+void thread_test_preemption (void);
+bool thread_compare_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+// project2
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9) 
 
 
-/* priority donation */
-bool thread_compare_donate_priority (const struct list_elem *l, const struct list_elem *s, void *aux UNUSED);
-void donate_priority (void);
-void remove_with_lock (struct lock *lock);
-void refresh_priority(void);
+#endif /* threads/thread.h */
 
-/* 2-4 syscall - fork */
-#define FDT_PAGES 3						  // pages to allocate for file descriptor tables (thread_create, process_exit)
-#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9) // Limit fdIdx
-
-#endif
